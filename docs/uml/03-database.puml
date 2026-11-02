@@ -1,0 +1,91 @@
+@startuml 03-database
+' Лаб. 2 — структура бази даних SQLite (schema.sql)
+!include _style.iuml
+hide circle
+hide empty members
+skinparam linetype polyline
+skinparam ranksep 60
+skinparam nodesep 60
+skinparam class {
+  FontSize 13
+  AttributeFontSize 12
+}
+
+entity "build_script" as build_script {
+  * <b>id</b> : INTEGER <<PK>> AUTOINCREMENT
+  --
+  * name : TEXT <<UNIQUE>>
+  description : TEXT
+  default_target : TEXT
+  * base_dir : TEXT DEFAULT '.'
+  * created_at : TEXT
+  * updated_at : TEXT
+}
+
+entity "script_property" as script_property {
+  * <b>id</b> : INTEGER <<PK>> AUTOINCREMENT
+  --
+  * script_id : INTEGER <<FK>>
+  * name : TEXT
+  * value : TEXT
+  * read_only : INTEGER DEFAULT 0
+  ..
+  UNIQUE (script_id, name)
+}
+
+entity "target" as target {
+  * <b>id</b> : INTEGER <<PK>> AUTOINCREMENT
+  --
+  * script_id : INTEGER <<FK>>
+  * name : TEXT
+  description : TEXT
+  * position : INTEGER
+  ..
+  UNIQUE (script_id, name)
+}
+
+entity "target_dependency" as target_dependency {
+  * <b>target_id</b> : INTEGER <<PK, FK>>
+  * <b>depends_on_id</b> : INTEGER <<PK, FK>>
+  ..
+  PRIMARY KEY (target_id, depends_on_id)
+}
+
+entity "task" as task {
+  * <b>id</b> : INTEGER <<PK>> AUTOINCREMENT
+  --
+  * target_id : INTEGER <<FK>>
+  * task_type : TEXT
+  * position : INTEGER
+}
+
+entity "task_attribute" as task_attribute {
+  * <b>id</b> : INTEGER <<PK>> AUTOINCREMENT
+  --
+  * task_id : INTEGER <<FK>>
+  * name : TEXT
+  * value : TEXT
+  ..
+  UNIQUE (task_id, name)
+}
+
+build_script ||--o{ script_property : "script_id"
+build_script ||--o{ target : "script_id"
+target ||--o{ target_dependency : "target_id"
+target ||--o{ target_dependency : "depends_on_id"
+target ||--o{ task : "target_id"
+task ||--o{ task_attribute : "task_id"
+
+class "Позначення" as Legend #FFFFFF {
+  * NOT NULL
+  <<PK>> первинний ключ
+  <<FK>> зовнішній ключ
+  <<UNIQUE>> унікальне значення
+  ..
+  Усі FK: ON DELETE CASCADE
+  (PRAGMA foreign_keys = ON)
+  Дати — текст ISO-8601
+}
+script_property -[hidden]- Legend
+
+@enduml

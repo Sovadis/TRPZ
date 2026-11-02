@@ -1,0 +1,52 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'ua.kpi.trpz'
+version = '1.0'
+
+java {
+    // Gradle may run on an older JDK; the project itself is always compiled and run with Java 21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.xerial:sqlite-jdbc:3.54.1.0'
+    implementation 'com.fifesoft:rsyntaxtextarea:4.0.1'
+    implementation 'com.fifesoft:autocomplete:4.0.0'
+    implementation 'com.formdev:flatlaf:3.7.2'
+
+    testImplementation platform('org.junit:junit-bom:5.14.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+application {
+    mainClass = 'ua.kpi.trpz.nantbuilder.ui.NantBuilderApp'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Generates the report screenshots of the forms into docs/screenshots
+tasks.register('screenshots', JavaExec) {
+    group = 'documentation'
+    description = 'Renders the application forms into docs/screenshots/*.png'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ua.kpi.trpz.nantbuilder.tools.ScreenshotMaker'
+    workingDir = projectDir
+    args = [projectDir.absolutePath]
+}

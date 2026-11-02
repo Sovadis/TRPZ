@@ -1,0 +1,113 @@
+@startuml 04a-classes-model
+' Лаб. 2 — діаграма класів: пакет model (реалізовані класи предметної області)
+!include _style.iuml
+skinparam ranksep 60
+skinparam nodesep 70
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+package "ua.kpi.trpz.nantbuilder.model" as model {
+  class BuildScript {
+    - id : Long
+    - name : String
+    - description : String
+    - defaultTarget : String
+    - baseDir : String = "."
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+    - properties : List<ScriptProperty> {readOnly}
+    - targets : List<Target> {readOnly}
+    --
+    + getProperties() : List<ScriptProperty>
+    + getTargets() : List<Target>
+    + addProperty(p : ScriptProperty) : void
+    + addTarget(t : Target) : void
+    + findTarget(name : String) : Optional<Target>
+  }
+
+  class ScriptProperty {
+    - id : Long
+    - scriptId : Long
+    - name : String
+    - value : String
+    - readOnly : boolean
+    --
+    + ScriptProperty(name : String, value : String)
+  }
+
+  class Target {
+    - id : Long
+    - scriptId : Long
+    - name : String
+    - description : String
+    - position : int
+    - dependsOn : List<String> {readOnly}
+    - tasks : List<BuildTask> {readOnly}
+    --
+    + getDependsOn() : List<String>
+    + getTasks() : List<BuildTask>
+    + addTask(t : BuildTask) : void
+  }
+
+  class BuildTask {
+    - id : Long
+    - targetId : Long
+    - type : TaskType
+    - position : int
+    - attributes : Map<String, String> {readOnly}
+    --
+    + getAttributes() : Map<String, String>
+    + getAttribute(name : String) : String
+    + setAttribute(name : String, value : String) : void
+    + {static} withDefaults(type : TaskType) : BuildTask
+  }
+
+  enum TaskType {
+    ECHO("echo", "message")
+    MKDIR("mkdir", "dir")
+    DELETE("delete", "dir")
+    COPY("copy", "file", "todir")
+    MSBUILD("msbuild", "project")
+    CSC("csc", "target", "output")
+    EXEC("exec", "program", "commandline")
+    --
+    - xmlName : String {readOnly}
+    - defaultAttributes : List<String> {readOnly}
+    --
+    - TaskType(xmlName : String, defaultAttributes : String...)
+    + getXmlName() : String
+    + getDefaultAttributes() : List<String>
+    + {static} fromXmlName(xmlName : String) : TaskType
+  }
+}
+
+BuildScript "1" *-- "0..*" Target : targets
+BuildScript "1" *-- "0..*" ScriptProperty : properties
+Target -[hidden]right- ScriptProperty
+Target "1" *-- "0..*" BuildTask : tasks
+BuildTask "0..*" -right-> "1" TaskType : "  type  "
+
+note right of BuildScript
+  Гетери й сетери скалярних полів
+  на діаграмі не показано.
+  Колекції — final ArrayList / LinkedHashMap;
+  їхні гетери повертають «живі» колекції.
+
+  Target.dependsOn — імена цілей
+  того самого скрипта.
+end note
+
+note bottom of BuildTask
+  attributes — LinkedHashMap
+  (зберігає порядок атрибутів);
+  withDefaults(type) заповнює
+  type.getDefaultAttributes() значенням ""
+end note
+
+note bottom of TaskType
+  fromXmlName(): IllegalArgumentException
+  для невідомого імені
+end note
+
+@enduml

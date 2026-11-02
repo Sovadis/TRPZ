@@ -1,0 +1,108 @@
+' Спільний стиль для всіх діаграм (друк у звіті A4, ~16 см завширшки)
+skinparam dpi 150
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam defaultFontColor #000000
+skinparam ArrowColor #333333
+skinparam ArrowFontName "Segoe UI"
+skinparam ArrowFontSize 11
+skinparam ArrowFontColor #000000
+skinparam ArrowThickness 1
+skinparam TitleFontSize 14
+skinparam padding 2
+
+skinparam note {
+  BackgroundColor #FAFAFA
+  BorderColor #777777
+  FontSize 11
+}
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+  FontStyle bold
+}
+skinparam class {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  HeaderBackgroundColor #F5F5F5
+  AttributeFontSize 11
+  StereotypeFontSize 10
+}
+skinparam stereotypeCBackgroundColor #E6E6E6
+skinparam stereotypeIBackgroundColor #E6E6E6
+skinparam stereotypeEBackgroundColor #E6E6E6
+skinparam stereotypeABackgroundColor #E6E6E6
+skinparam stereotypeCBorderColor #333333
+skinparam stereotypeIBorderColor #333333
+skinparam stereotypeEBorderColor #333333
+skinparam stereotypeABorderColor #333333
+skinparam entity {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+}
+skinparam usecase {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam component {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  StereotypeFontSize 10
+}
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam node {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  StereotypeFontSize 10
+}
+skinparam artifact {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  StereotypeFontSize 10
+}
+skinparam database {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+}
+skinparam collections {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+}
+skinparam folder {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+}
+skinparam frame {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+}
+skinparam sequence {
+  ParticipantBackgroundColor #F5F5F5
+  ParticipantBorderColor #333333
+  ActorBackgroundColor #FFFFFF
+  ActorBorderColor #333333
+  LifeLineBorderColor #777777
+  LifeLineBackgroundColor #E6E6E6
+  GroupBorderColor #555555
+  GroupBackgroundColor #F0F0F0
+  GroupHeaderFontStyle bold
+  BoxBorderColor #999999
+  BoxBackgroundColor #FFFFFF
+  ReferenceBackgroundColor #FFFFFF
+  ReferenceBorderColor #555555
+  MessageAlign left
+}

@@ -1,0 +1,75 @@
+@startuml 02-domain-model
+' Лаб. 2 — концептуальна модель предметної області (без методів)
+!include _style.iuml
+skinparam ranksep 70
+skinparam nodesep 60
+skinparam class {
+  FontSize 13
+  AttributeFontSize 12
+}
+hide methods
+hide empty members
+
+class Solution {
+  name : String
+  directory : Path
+}
+
+class SolutionProject {
+  name : String
+  relativePath : String
+  guid : String
+}
+
+class BuildScript {
+  name : String
+  description : String
+  defaultTarget : String
+  baseDir : String
+  createdAt : LocalDateTime
+  updatedAt : LocalDateTime
+}
+
+class ScriptProperty {
+  name : String
+  value : String
+  readOnly : boolean
+}
+
+class Target {
+  name : String
+  description : String
+  position : int
+}
+
+class BuildTask {
+  position : int
+}
+
+class TaskAttribute {
+  name : String
+  value : String
+}
+
+enum TaskType {
+  ECHO
+  MKDIR
+  DELETE
+  COPY
+  MSBUILD
+  CSC
+  EXEC
+}
+
+Solution .right.> BuildScript : <<генерує>>
+Solution "1" *-- "1..*" SolutionProject : проєкти
+SolutionProject "0..*" --> "0..*" SolutionProject : залежить від
+
+BuildScript "1" *-- "0..*" ScriptProperty : властивості
+BuildScript "1" *-- "0..*" Target : цілі
+Target "0..*" --> "0..*" Target : залежить від
+Target "1" *-- "0..*" BuildTask : завдання
+TaskAttribute "0..*" -right-* "1" BuildTask : атрибути
+BuildTask "0..*" -right-> "1" TaskType : тип
+
+@enduml

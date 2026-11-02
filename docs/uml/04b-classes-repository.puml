@@ -1,0 +1,110 @@
+@startuml 04b-classes-repository
+' Лаб. 2 — діаграма класів: пакети repository, repository.jdbc, db (шаблон Repository)
+!include _style.iuml
+!pragma layout elk
+skinparam ranksep 45
+skinparam nodesep 30
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+package "ua.kpi.trpz.nantbuilder.repository" as repository {
+  interface "Repository<T, ID>" as Repository {
+    + findById(id : ID) : Optional<T>
+    + findAll() : List<T>
+    + save(entity : T) : T
+    + deleteById(id : ID) : void
+  }
+  interface BuildScriptRepository {
+    + findByName(name : String) : Optional<BuildScript>
+  }
+  interface PropertyRepository {
+    + findByScriptId(scriptId : long) : List<ScriptProperty>
+    + deleteByScriptId(scriptId : long) : void
+  }
+  interface TargetRepository {
+    + findByScriptId(scriptId : long) : List<Target>
+    + deleteByScriptId(scriptId : long) : void
+    + saveDependencies(targetId : long, dependsOnIds : List<Long>) : void
+    + findDependencyIds(targetId : long) : List<Long>
+  }
+  interface TaskRepository {
+    + findByTargetId(targetId : long) : List<BuildTask>
+  }
+}
+
+package "ua.kpi.trpz.nantbuilder.repository.jdbc" as jdbc {
+  class JdbcBuildScriptRepository {
+    - db : Database {readOnly}
+    --
+    + JdbcBuildScriptRepository(db : Database)
+  }
+  class JdbcPropertyRepository {
+    - db : Database {readOnly}
+    --
+    + JdbcPropertyRepository(db : Database)
+  }
+  class JdbcTargetRepository {
+    - db : Database {readOnly}
+    --
+    + JdbcTargetRepository(db : Database)
+  }
+  class JdbcTaskRepository {
+    - db : Database {readOnly}
+    --
+    + JdbcTaskRepository(db : Database)
+  }
+}
+
+package "ua.kpi.trpz.nantbuilder.db" as db {
+  class Database {
+    - connection : Connection {readOnly}
+    - transactionDepth : int
+    --
+    + Database(jdbcUrl : String)
+    + {static} openFile(file : Path) : Database
+    + getConnection() : Connection
+    + initSchema() : void
+    + inTransaction<T>(work : SqlFunction<T>) : T
+    + close() : void
+  }
+  interface "SqlFunction<T>" as SqlFunction <<FunctionalInterface>> {
+    + apply(connection : Connection) : T throws SQLException
+  }
+  class DataAccessException {
+    + DataAccessException(message : String)
+    + DataAccessException(message : String, cause : Throwable)
+  }
+}
+
+interface "java.lang.AutoCloseable" as AutoCloseable
+class "java.lang.RuntimeException" as RuntimeException
+
+' --- узагальнення інтерфейсів (2 × 2)
+Repository <|-- BuildScriptRepository : T = BuildScript\nID = Long
+Repository <|-- PropertyRepository : T = ScriptProperty\nID = Long
+Repository <|-- TargetRepository : T = Target\nID = Long
+Repository <|-- TaskRepository : T = BuildTask\nID = Long
+BuildScriptRepository -[hidden]- TargetRepository
+PropertyRepository -[hidden]- TaskRepository
+
+' --- реалізації (2 × 2)
+BuildScriptRepository <|.. JdbcBuildScriptRepository
+PropertyRepository <|.. JdbcPropertyRepository
+TargetRepository <|.. JdbcTargetRepository
+TaskRepository <|.. JdbcTaskRepository
+JdbcBuildScriptRepository -[hidden]- JdbcTargetRepository
+JdbcPropertyRepository -[hidden]- JdbcTaskRepository
+
+' --- залежність від Database
+JdbcBuildScriptRepository ..> Database
+JdbcPropertyRepository ..> Database
+JdbcTargetRepository ..> Database
+JdbcTaskRepository ..> Database
+
+Database ..|> AutoCloseable
+Database ..> SqlFunction : <<use>>
+Database ..> DataAccessException : <<throw>>
+DataAccessException --|> RuntimeException
+
+@enduml
