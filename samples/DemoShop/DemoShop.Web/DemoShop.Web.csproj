@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DemoShop.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DemoShop.Core\DemoShop.Core.csproj" />
+    <ProjectReference Include="..\DemoShop.Data\DemoShop.Data.csproj" />
+  </ItemGroup>
+
+</Project>

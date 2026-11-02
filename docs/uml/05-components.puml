@@ -1,0 +1,102 @@
+@startuml 05-components
+' Лаб. 3 — діаграма компонентів
+!include _style.iuml
+skinparam componentStyle uml2
+skinparam ranksep 38
+skinparam nodesep 35
+skinparam component {
+  FontSize 12
+}
+skinparam interface {
+  FontSize 11
+}
+
+component "NAnt Script Builder  (nant-script-builder.jar)" as App #FFFFFF {
+
+  component UI <<Swing>> [
+    <b>Користувацький інтерфейс</b>
+    пакет ui: NantBuilderApp, MainForm,
+    ScriptDialog, ScriptEditorForm,
+    NantCompletionProvider
+  ]
+
+  component SVC [
+    <b>Сервісний рівень</b>
+    пакет service: ScriptService,
+    SolutionImportService, SolutionParser,
+    ScriptGenerator, XmlScriptSerializer
+  ]
+
+  component MODEL [
+    <b>Модель</b>
+    пакет model: BuildScript,
+    ScriptProperty, Target,
+    BuildTask, TaskType
+  ]
+
+  component REPO <<JDBC>> [
+    <b>Репозиторії</b>
+    пакети repository,
+    repository.jdbc: Jdbc*Repository
+  ]
+
+  component DBA [
+    <b>Доступ до БД</b>
+    пакет db: Database,
+    SqlFunction, DataAccessException
+  ]
+
+  interface " " as IScriptService
+  interface " " as IImport
+  interface " " as IBSR
+  interface " " as IPR
+  interface " " as ITR
+  interface " " as ITaskR
+  interface " " as IDatabase
+}
+
+component "RSyntaxTextArea" <<бібліотека>> as RSTA
+component "AutoComplete" <<бібліотека>> as AC
+component "FlatLaf" <<бібліотека>> as FLAT
+component "sqlite-jdbc" <<бібліотека, JDBC-драйвер>> as SQLJ
+interface " " as IJDBC
+database "nantbuilder.db" <<SQLite>> as DBFILE
+artifact "~*.sln, ~*.csproj" as SLN
+artifact "~*.build" as BUILD
+
+' --- надані (provided) інтерфейси
+SVC -up- IScriptService : ScriptService
+SVC -up- IImport : SolutionImportService
+REPO -up- IBSR : BuildScriptRepository
+REPO -up- IPR : PropertyRepository
+REPO -up- ITR : TargetRepository
+REPO -up- ITaskR : TaskRepository
+DBA -up- IDatabase : Database
+SQLJ -up- IJDBC : JDBC API (java.sql)
+
+' --- потрібні (required) інтерфейси
+UI ..> IScriptService : <<use>>
+UI ..> IImport : <<use>>
+SVC ..> IBSR : <<use>>
+SVC ..> IPR : <<use>>
+SVC ..> ITR : <<use>>
+SVC ..> ITaskR : <<use>>
+SVC ..> IDatabase : <<use>>
+REPO ..> IDatabase : <<use>>
+DBA ..> IJDBC : <<use>>
+
+' --- модель використовують усі рівні
+UI ..> MODEL
+SVC ..> MODEL
+REPO ..> MODEL
+
+' --- зовнішні бібліотеки та файли
+UI ..> RSTA : <<use>>
+UI ..> AC : <<use>>
+UI ..> FLAT : <<use>>
+AC ..> RSTA
+SQLJ -right-> DBFILE : читання /\nзапис
+SVC ..> SLN : <<читає>>
+SVC ..> BUILD : <<записує>>
+
+@enduml

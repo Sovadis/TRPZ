@@ -1,0 +1,84 @@
+@startuml 08-seq-import-solution
+' Лаб. 3 — діаграма послідовності для сценарію S2 «Імпортувати рішення .sln»
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 150
+
+actor "Розробник" as Dev
+participant ":MainForm" as MF
+participant ":JFileChooser" as FC
+participant ":SolutionImport\nService" as IS
+participant ":Solution\nParser" as SP
+participant ":Script\nGenerator" as GEN
+participant ":ScriptService" as SS
+participant ":ScriptEditor\nForm" as ED
+
+Dev -> MF : <back:#FFFFFF>натискає «Імпорт .sln»</back>
+activate MF
+MF -> FC : <back:#FFFFFF>showOpenDialog(this)</back>
+activate FC
+Dev -> FC : <back:#FFFFFF>обирає файл *.sln, «Відкрити»</back>
+FC --> MF : <back:#FFFFFF>APPROVE_OPTION</back>
+deactivate FC
+MF -> IS : <back:#FFFFFF>importSolution(slnFile)</back>
+activate IS
+
+alt рішення\nкоректне
+  IS -> SP : <back:#FFFFFF>parse(slnFile)</back>
+  activate SP
+  SP -> SP : <back:#FFFFFF>readSolutionFile(): Project(…) без папок рішення, ProjectDependencies</back>
+  loop кожен\nпроєкт
+    SP -> SP : <back:#FFFFFF>readProjectReferences(): <ProjectReference></back>
+  end
+  SP --> IS : <back:#FFFFFF>SolutionInfo</back>
+  deactivate SP
+  IS -> IS : <back:#FFFFFF>перевірка: є проєкти</back>
+  IS -> GEN : <back:#FFFFFF>generate(solution)</back>
+  activate GEN
+  GEN -> GEN : <back:#FFFFFF>sortByDependencies(); властивості; цілі clean, build-<Project>, build</back>
+  GEN --> IS : <back:#FFFFFF>script : BuildScript</back>
+  deactivate GEN
+  IS -> IS : <back:#FFFFFF>uniqueName() за scriptService.listScripts(): «X», «X (2)», …</back>
+  IS -> SS : <back:#FFFFFF>saveScript(script)</back>
+  activate SS
+  ref over SS : Збереження\nскрипта
+  SS --> IS : <back:#FFFFFF>script (з id)</back>
+  deactivate SS
+  IS --> MF : <back:#FFFFFF>script</back>
+  deactivate IS
+
+  MF -> MF : <back:#FFFFFF>refreshScripts() (див. S1)</back>
+  MF -> MF : <back:#FFFFFF>openEditor(id)</back>
+  activate MF
+  MF -> SS : <back:#FFFFFF>loadScript(id)</back>
+  activate SS
+  ref over SS : Завантаження\nскрипта
+  SS --> MF : <back:#FFFFFF>script (повний граф)</back>
+  deactivate SS
+  MF -> ED : <back:#FFFFFF><<create>> new ScriptEditorForm(scriptService, script)</back>
+  MF -> ED : <back:#FFFFFF>setVisible(true)</back>
+  activate ED
+  deactivate MF
+  ED --> Dev : <back:#FFFFFF>редактор: дерево цілей і вкладка «XML»</back>
+  deactivate ED
+
+else файл не\nчитається
+  activate IS
+  IS -> SP : <back:#FFFFFF>parse(slnFile)</back>
+  activate SP
+  SP --> IS : <back:#FFFFFF>IOException</back>
+  deactivate SP
+  IS --> MF : <back:#FFFFFF>IOException</back>
+  deactivate IS
+  MF --> Dev : <back:#FFFFFF>«Помилка»: «Не вдалося прочитати рішення …»; нічого не збережено</back>
+
+else немає\nпроєктів\nабо цикл
+  activate IS
+  IS --> MF : <back:#FFFFFF>ValidationException (з importSolution() або з generate())</back>
+  deactivate IS
+  MF --> Dev : <back:#FFFFFF>«Помилка»: «У файлі … не знайдено жодного проєкту» або «Циклічна залежність між проєктами…»; нічого не збережено</back>
+end
+deactivate MF
+
+@enduml

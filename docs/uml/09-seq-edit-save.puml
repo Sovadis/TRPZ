@@ -1,0 +1,78 @@
+@startuml 09-seq-edit-save
+' Лаб. 3 — діаграма послідовності для сценарію S3 «Конструювати скрипт перетягуванням» (+ збереження)
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 240
+
+actor "Розробник" as Dev
+participant ":ScriptEditorForm" as ED
+participant "target\n:Target" as TG
+participant "task\n:BuildTask" as BT
+participant ":XmlScript\nSerializer" as XS
+participant ":ScriptService" as SS
+
+== Перетягування елемента палітри ==
+Dev -> ED : <back:#FFFFFF>перетягує «echo» з палітри над вузлом дерева</back>
+activate ED
+ED -> ED : <back:#FFFFFF>TreeDropHandler.canImport(): canAdd("echo", node)</back>
+alt вузол не\nє ціллю
+  ED --> Dev : <back:#FFFFFF>курсор «заборонено»; скидання відхилено, нічого не змінюється</back>
+else вузол\nцілі
+  Dev -> ED : <back:#FFFFFF>відпускає елемент на вузлі цілі</back>
+  ED -> ED : <back:#FFFFFF>TreeDropHandler.importData() → addPaletteItem("echo", node)</back>
+  ED -> BT ** : <back:#FFFFFF>BuildTask.withDefaults(TaskType.fromXmlName("echo"))</back>
+  ED -> TG : <back:#FFFFFF>addTask(task)</back>
+  activate TG
+  deactivate TG
+  ED -> ED : <back:#FFFFFF>rebuildTree(); selectObject(task) → showAttributes()</back>
+  ED -> XS : <back:#FFFFFF>toXml(script) (refreshXml)</back>
+  activate XS
+  XS --> ED : <back:#FFFFFF>XML-текст (вкладка «XML»)</back>
+  deactivate XS
+  ED --> Dev : <back:#FFFFFF>новий вузол «echo» виділено; таблиця атрибутів: message = ""</back>
+end
+deactivate ED
+
+== Редагування атрибутів ==
+Dev -> ED : <back:#FFFFFF>вводить значення атрибута message у таблиці</back>
+activate ED
+ED -> BT : <back:#FFFFFF>setAttribute("message", value)</back>
+activate BT
+deactivate BT
+ED -> XS : <back:#FFFFFF>toXml(script)</back>
+activate XS
+XS --> ED : <back:#FFFFFF>XML-текст</back>
+deactivate XS
+deactivate ED
+
+== Збереження ==
+Dev -> ED : <back:#FFFFFF>натискає «Зберегти»</back>
+activate ED
+ED -> SS : <back:#FFFFFF>saveScript(script)</back>
+activate SS
+ref over SS : Збереження\nскрипта
+
+alt помилка\nзбереження
+  SS --> ED : <back:#FFFFFF>ValidationException / DataAccessException (транзакцію відкочено)</back>
+  deactivate SS
+  ED --> Dev : <back:#FFFFFF>«Скрипт не збережено: …»; зміни залишаються в редакторі</back>
+else збережено
+  activate SS
+  SS --> ED : <back:#FFFFFF>script</back>
+  deactivate SS
+  ED -> SS : <back:#FFFFFF>loadScript(script.getId())</back>
+  activate SS
+  ref over SS : Завантаження\nскрипта
+  SS --> ED : <back:#FFFFFF>script (перечитаний з БД)</back>
+  deactivate SS
+  ED -> ED : <back:#FFFFFF>rebuildTree()</back>
+  ED -> XS : <back:#FFFFFF>toXml(script)</back>
+  activate XS
+  XS --> ED : <back:#FFFFFF>XML-текст</back>
+  deactivate XS
+  ED --> Dev : <back:#FFFFFF>оновлені дерево і вкладка «XML»; «Скрипт збережено в базі даних»</back>
+end
+deactivate ED
+
+@enduml

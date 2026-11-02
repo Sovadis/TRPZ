@@ -1,0 +1,71 @@
+@startuml 06-deployment
+' Лаб. 3 — діаграма розгортання
+!include _style.iuml
+skinparam ranksep 55
+skinparam nodesep 60
+skinparam linetype polyline
+skinparam node {
+  FontSize 12
+}
+skinparam artifact {
+  FontSize 11
+}
+
+node "Робоча станція розробника (Windows)" <<device>> as PC {
+
+  node "JVM (Java 21)" <<executionEnvironment>> as JVM {
+    artifact "nant-script-builder.jar" <<executable>> as JAR
+    folder "lib (classpath)" as LIBS {
+      artifact "rsyntaxtextarea-4.0.1.jar" as LIB1
+      artifact "autocomplete-4.0.0.jar" as LIB2
+      artifact "flatlaf-3.7.2.jar" as LIB3
+      artifact "sqlite-jdbc-3.54.1.0.jar" as LIB4
+    }
+  }
+
+  folder "Файлова система" as FS {
+    artifact DBFILE <<SQLite>> [
+      nantbuilder.db
+      ----
+      %USERPROFILE%
+      \.nant-script-builder
+    ]
+    artifact SLN <<вхідні файли>> [
+      ~*.sln, ~*.csproj
+      ----
+      каталог рішення
+      Visual Studio
+    ]
+    artifact BUILD <<NAnt-скрипт>> [
+      ~*.build
+      ----
+      результат експорту
+    ]
+  }
+
+  node "NAnt (.NET Framework / Mono)" <<executionEnvironment>> as NANTENV {
+    artifact NANT [
+      nant.exe
+      ----
+      UC13 «Запустити збірку»
+      (заплановано)
+    ]
+  }
+}
+
+' бібліотеки 2 × 2
+LIB1 -[hidden]right- LIB2
+LIB3 -[hidden]right- LIB4
+LIB1 -[hidden]down- LIB3
+LIB2 -[hidden]down- LIB4
+LIB3 -[hidden]down- JAR
+LIB4 -[hidden]down- JAR
+JAR .up.> LIBS
+
+JAR -- DBFILE : JDBC (sqlite-jdbc)
+JAR -- SLN : файловий I/O:\nчитання (імпорт)
+JAR -- BUILD : файловий I/O:\nзапис (експорт)
+BUILD -[norank]- NANTENV : читає
+JAR .. NANTENV : <<process>>\nзапуск nant.exe
+
+@enduml

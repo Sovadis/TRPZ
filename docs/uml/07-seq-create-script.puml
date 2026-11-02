@@ -1,0 +1,84 @@
+@startuml 07-seq-create-script
+' Лаб. 3 — діаграма послідовності для сценарію S1 «Створити скрипт збірки»
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 135
+
+actor "Розробник" as Dev
+participant ":MainForm" as MF
+participant ":ScriptDialog" as SD
+participant ":ScriptService" as SS
+participant ":Database" as DB
+participant ":BuildScript\nRepository" as BSR
+participant ":Target\nRepository" as TR
+database "nantbuilder.db" as SQL
+
+Dev -> MF : <back:#FFFFFF>натискає «Новий скрипт»</back>
+activate MF
+MF -> SD ** : <back:#FFFFFF>new ScriptDialog(…)</back>
+MF -> SD : <back:#FFFFFF>showDialog()</back>
+activate SD
+SD --> Dev : <back:#FFFFFF>модальний діалог «Новий скрипт збірки»</back>
+Dev -> SD : <back:#FFFFFF>заповнює «Назва», «Опис», «Базова директорія», натискає «Створити»</back>
+SD -> SS : <back:#FFFFFF>createScript(name, description, baseDir)</back>
+activate SS
+
+alt назва порожня
+  SS --> SD : <back:#FFFFFF>ValidationException(«Назва скрипта не може бути порожньою»)</back>
+  SD --> Dev : <back:#FFFFFF>текст помилки в червоній мітці; діалог залишається відкритим</back>
+else назва задана
+  SS -> BSR : <back:#FFFFFF>findByName(name)</back>
+  activate BSR
+  BSR -> SQL : <back:#FFFFFF>SELECT … WHERE name = ?</back>
+  BSR --> SS : <back:#FFFFFF>Optional<BuildScript></back>
+  deactivate BSR
+
+  alt назва зайнята
+    SS --> SD : <back:#FFFFFF>ValidationException(«Скрипт з назвою «…» уже існує»)</back>
+    SD --> Dev : <back:#FFFFFF>текст помилки в червоній мітці; діалог залишається відкритим</back>
+  else назва унікальна
+    SS -> DB : <back:#FFFFFF>inTransaction(work)</back>
+    activate DB
+    DB -> SQL : <back:#FFFFFF>setAutoCommit(false)</back>
+    DB -> SS : <back:#FFFFFF>apply(connection)</back>
+    activate SS
+    SS -> BSR : <back:#FFFFFF>save(script)</back>
+    activate BSR
+    BSR -> SQL : <back:#FFFFFF>INSERT INTO build_script</back>
+    BSR --> SS : <back:#FFFFFF>script (згенерований id)</back>
+    deactivate BSR
+    SS -> TR : <back:#FFFFFF>save(target «build»)</back>
+    activate TR
+    TR -> SQL : <back:#FFFFFF>INSERT INTO target</back>
+    TR --> SS : <back:#FFFFFF>target</back>
+    deactivate TR
+    SS --> DB : <back:#FFFFFF>script</back>
+    deactivate SS
+    DB -> SQL : <back:#FFFFFF>COMMIT</back>
+    DB --> SS : <back:#FFFFFF>script</back>
+    deactivate DB
+    SS --> SD : <back:#FFFFFF>script</back>
+    deactivate SS
+    SD -> SD : <back:#FFFFFF>dispose()</back>
+    SD --> MF : <back:#FFFFFF>Optional.of(script)</back>
+    deactivate SD
+
+    MF -> MF : <back:#FFFFFF>refreshScripts()</back>
+    activate MF
+    MF -> SS : <back:#FFFFFF>listScripts()</back>
+    activate SS
+    SS -> BSR : <back:#FFFFFF>findAll()</back>
+    activate BSR
+    BSR -> SQL : <back:#FFFFFF>SELECT … ORDER BY name</back>
+    BSR --> SS : <back:#FFFFFF>List<BuildScript></back>
+    deactivate BSR
+    SS --> MF : <back:#FFFFFF>List<BuildScript></back>
+    deactivate SS
+    deactivate MF
+    MF --> Dev : <back:#FFFFFF>таблиця скриптів із новим рядком</back>
+  end
+end
+deactivate MF
+
+@enduml

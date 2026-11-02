@@ -1,0 +1,53 @@
+@startuml 11-seq-load-script
+' Лаб. 3 — діаграма послідовності «Завантаження скрипта»: ScriptService.loadScript(id)
+' (на неї посилаються фрагменти ref у діаграмах S2 і S3)
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 150
+mainframe **sd** Завантаження скрипта — ScriptService.loadScript(id)
+
+participant ":ScriptService" as SS
+participant ":BuildScript\nRepository" as BSR
+participant ":Property\nRepository" as PR
+participant ":Target\nRepository" as TR
+participant ":Task\nRepository" as TKR
+database "nantbuilder.db" as SQL
+
+[-> SS : <back:#FFFFFF>loadScript(id)</back>
+activate SS
+SS -> BSR : <back:#FFFFFF>findById(id)</back>
+activate BSR
+BSR -> SQL : <back:#FFFFFF>SELECT … FROM build_script WHERE id = ?</back>
+BSR --> SS : <back:#FFFFFF>Optional<BuildScript></back>
+deactivate BSR
+alt скрипт не\nзнайдено
+  [<-- SS : <back:#FFFFFF>ValidationException</back>
+else знайдено
+  SS -> PR : <back:#FFFFFF>findByScriptId(id)</back>
+  activate PR
+  PR -> SQL : <back:#FFFFFF>SELECT … FROM script_property</back>
+  PR --> SS : <back:#FFFFFF>List<ScriptProperty></back>
+  deactivate PR
+  SS -> TR : <back:#FFFFFF>findByScriptId(id)</back>
+  activate TR
+  TR -> SQL : <back:#FFFFFF>SELECT … FROM target ORDER BY position</back>
+  TR --> SS : <back:#FFFFFF>List<Target></back>
+  deactivate TR
+  loop кожна ціль
+    SS -> TR : <back:#FFFFFF>findDependencyIds(targetId)</back>
+    activate TR
+    TR -> SQL : <back:#FFFFFF>SELECT … FROM target_dependency</back>
+    TR --> SS : <back:#FFFFFF>List<Long></back>
+    deactivate TR
+    SS -> TKR : <back:#FFFFFF>findByTargetId(targetId)</back>
+    activate TKR
+    TKR -> SQL : <back:#FFFFFF>SELECT … FROM task; SELECT … FROM task_attribute</back>
+    TKR --> SS : <back:#FFFFFF>List<BuildTask></back>
+    deactivate TKR
+  end
+  [<-- SS : <back:#FFFFFF>script (властивості, цілі, залежності, завдання)</back>
+end
+deactivate SS
+
+@enduml

@@ -1,0 +1,88 @@
+@startuml 10-seq-save-script
+' Лаб. 3 — діаграма послідовності «Збереження скрипта»: ScriptService.saveScript(script)
+' (на неї посилаються фрагменти ref у діаграмах S2 і S3)
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 150
+mainframe **sd** Збереження скрипта — ScriptService.saveScript(script)
+
+participant ":ScriptService" as SS
+participant ":Database" as DB
+participant ":BuildScript\nRepository" as BSR
+participant ":Property\nRepository" as PR
+participant ":Target\nRepository" as TR
+participant ":Task\nRepository" as TKR
+database "nantbuilder.db" as SQL
+
+[-> SS : <back:#FFFFFF>saveScript(script)</back>
+activate SS
+SS -> SS : <back:#FFFFFF>validate(script): назва, властивості, цілі, залежності</back>
+SS -> BSR : <back:#FFFFFF>findByName(name)</back>
+activate BSR
+BSR -> SQL : <back:#FFFFFF>SELECT … FROM build_script</back>
+BSR --> SS : <back:#FFFFFF>Optional<BuildScript></back>
+deactivate BSR
+
+alt дані\nнекоректні
+  [<-- SS : <back:#FFFFFF>ValidationException</back>
+else дані\nкоректні
+  SS -> SS : <back:#FFFFFF>updatedAt = now()</back>
+  SS -> DB : <back:#FFFFFF>inTransaction(work)</back>
+  activate DB
+  DB -> SQL : <back:#FFFFFF>setAutoCommit(false)</back>
+  DB -> SS : <back:#FFFFFF>apply(connection)</back>
+  activate SS
+  SS -> BSR : <back:#FFFFFF>save(script)</back>
+  activate BSR
+  BSR -> SQL : <back:#FFFFFF>INSERT / UPDATE build_script</back>
+  deactivate BSR
+  SS -> PR : <back:#FFFFFF>deleteByScriptId(scriptId)</back>
+  activate PR
+  PR -> SQL : <back:#FFFFFF>DELETE FROM script_property</back>
+  deactivate PR
+  SS -> TR : <back:#FFFFFF>deleteByScriptId(scriptId)</back>
+  activate TR
+  TR -> SQL : <back:#FFFFFF>DELETE FROM target (каскадно task, task_attribute, target_dependency)</back>
+  deactivate TR
+  loop кожна\nвластивість
+    SS -> PR : <back:#FFFFFF>save(property)</back>
+    activate PR
+    PR -> SQL : <back:#FFFFFF>INSERT INTO script_property</back>
+    deactivate PR
+  end
+  loop кожна ціль
+    SS -> TR : <back:#FFFFFF>save(target)</back>
+    activate TR
+    TR -> SQL : <back:#FFFFFF>INSERT INTO target</back>
+    deactivate TR
+    loop кожне\nзавдання
+      SS -> TKR : <back:#FFFFFF>save(task)</back>
+      activate TKR
+      TKR -> SQL : <back:#FFFFFF>INSERT INTO task; INSERT INTO task_attribute</back>
+      deactivate TKR
+    end
+  end
+  loop кожна ціль
+    SS -> TR : <back:#FFFFFF>saveDependencies(targetId, dependsOnIds)</back>
+    activate TR
+    TR -> SQL : <back:#FFFFFF>INSERT INTO target_dependency</back>
+    deactivate TR
+  end
+  SS --> DB : <back:#FFFFFF>script</back>
+  deactivate SS
+
+  alt успішно
+    DB -> SQL : <back:#FFFFFF>COMMIT</back>
+    DB --> SS : <back:#FFFFFF>script</back>
+    [<-- SS : <back:#FFFFFF>script</back>
+  else SQLException
+    DB -> SQL : <back:#FFFFFF>ROLLBACK</back>
+    DB --> SS : <back:#FFFFFF>DataAccessException</back>
+    [<-- SS : <back:#FFFFFF>DataAccessException</back>
+  end
+  deactivate DB
+end
+deactivate SS
+
+@enduml
