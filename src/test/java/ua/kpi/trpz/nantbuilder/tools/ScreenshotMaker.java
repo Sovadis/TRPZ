@@ -10,6 +10,8 @@ import ua.kpi.trpz.nantbuilder.model.BuildTask;
 import ua.kpi.trpz.nantbuilder.model.ScriptProperty;
 import ua.kpi.trpz.nantbuilder.model.Target;
 import ua.kpi.trpz.nantbuilder.model.TaskType;
+import ua.kpi.trpz.nantbuilder.repository.cache.CacheStatistics;
+import ua.kpi.trpz.nantbuilder.repository.cache.CachingBuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcBuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcPropertyRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcTargetRepository;
@@ -18,6 +20,7 @@ import ua.kpi.trpz.nantbuilder.service.ScriptGenerator;
 import ua.kpi.trpz.nantbuilder.service.ScriptService;
 import ua.kpi.trpz.nantbuilder.service.SolutionImportService;
 import ua.kpi.trpz.nantbuilder.service.SolutionParser;
+import ua.kpi.trpz.nantbuilder.ui.CacheStatisticsLabel;
 import ua.kpi.trpz.nantbuilder.ui.MainForm;
 import ua.kpi.trpz.nantbuilder.ui.ScriptDialog;
 import ua.kpi.trpz.nantbuilder.ui.ScriptEditorForm;
@@ -85,7 +88,10 @@ public final class ScreenshotMaker {
 
         try (Database db = Database.openFile(dbFile)) {
             db.initSchema();
-            ScriptService scriptService = new ScriptService(db, new JdbcBuildScriptRepository(db),
+            // з'єднання таке саме, як у NantBuilderApp: заголовки скриптів читаються через кешуючий замісник
+            CacheStatistics cacheStatistics = new CacheStatistics();
+            ScriptService scriptService = new ScriptService(db,
+                    new CachingBuildScriptRepository(new JdbcBuildScriptRepository(db), cacheStatistics),
                     new JdbcPropertyRepository(db), new JdbcTargetRepository(db), new JdbcTaskRepository(db));
             SolutionImportService importService =
                     new SolutionImportService(new SolutionParser(), new ScriptGenerator(), scriptService);
@@ -158,8 +164,22 @@ public final class ScreenshotMaker {
             settle(1500);   // спливаюче вікно автодоповнення відкривається із затримкою
             capture(editor, outDir.resolve("04-editor-xml.png"));
 
+            // 5. Головна форма з індикатором кешу (шаблон Proxy) у рядку стану після кількох оновлень списку
             onEdt(() -> {
                 editor.dispose();
+                mainForm.addStatusWidget(new CacheStatisticsLabel(cacheStatistics));
+                // користувач по черзі відкриває скрипти в редакторі й повертається до списку
+                for (BuildScript script : scriptService.listScripts()) {
+                    scriptService.loadScript(script.getId());
+                    mainForm.refreshScripts();
+                }
+                find(mainForm, JTable.class, null).setRowSelectionInterval(0, 0);
+                mainForm.toFront();
+                return null;
+            });
+            capture(mainForm, outDir.resolve("05-main-form-cache.png"));
+
+            onEdt(() -> {
                 mainForm.dispose();
                 return null;
             });

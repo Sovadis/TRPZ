@@ -1,0 +1,127 @@
+@startuml 12-proxy-classes
+' Лаб. 4 — діаграма класів: шаблон Proxy (кешуючий замісник репозиторію заголовків скриптів)
+!include _style.iuml
+skinparam ranksep 50
+skinparam nodesep 40
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+class NantBuilderApp {
+  + {static} main(args : String[]) : void
+}
+
+class MainForm {
+  + refreshScripts() : void
+  + addStatusWidget(widget : JComponent) : void
+}
+
+class ScriptService <<Client>> {
+  - scripts : BuildScriptRepository {readOnly}
+  --
+  + listScripts() : List<BuildScript>
+  + createScript(name, description, baseDir) : BuildScript
+  + loadScript(id : long) : BuildScript
+  + saveScript(script : BuildScript) : BuildScript
+  + deleteScript(id : long) : void
+}
+
+interface BuildScriptRepository <<Subject>> {
+  + findById(id : Long) : Optional<BuildScript>
+  + findAll() : List<BuildScript>
+  + save(entity : BuildScript) : BuildScript
+  + deleteById(id : Long) : void
+  + findByName(name : String) : Optional<BuildScript>
+}
+
+class JdbcBuildScriptRepository <<RealSubject>> {
+  - db : Database {readOnly}
+  --
+  + JdbcBuildScriptRepository(db : Database)
+  + findById(id : Long) : Optional<BuildScript>
+  + findAll() : List<BuildScript>
+  + save(entity : BuildScript) : BuildScript
+  + deleteById(id : Long) : void
+  + findByName(name : String) : Optional<BuildScript>
+}
+
+class CachingBuildScriptRepository <<Proxy>> {
+  - target : BuildScriptRepository {readOnly}
+  - statistics : CacheStatistics {readOnly}
+  - cache : List<BuildScript>
+  --
+  + CachingBuildScriptRepository(target : BuildScriptRepository,
+      statistics : CacheStatistics)
+  + findById(id : Long) : Optional<BuildScript>
+  + findAll() : List<BuildScript>
+  + save(entity : BuildScript) : BuildScript
+  + deleteById(id : Long) : void
+  + findByName(name : String) : Optional<BuildScript>
+  + invalidate() : void
+  - {static} copyOf(source : BuildScript) : BuildScript
+}
+
+class CacheStatistics {
+  - hits : AtomicLong
+  - misses : AtomicLong
+  - invalidations : AtomicLong
+  - listeners : List<Runnable>
+  --
+  + recordHit() : void
+  + recordMiss() : void
+  + recordInvalidation() : void
+  + getHits() : long
+  + getMisses() : long
+  + getInvalidations() : long
+  + addListener(listener : Runnable) : void
+  + removeListener(listener : Runnable) : void
+}
+
+class CacheStatisticsLabel {
+  - statistics : CacheStatistics {readOnly}
+  --
+  + CacheStatisticsLabel(statistics : CacheStatistics)
+  - onStatisticsChanged() : void
+  - updateText() : void
+}
+
+class "javax.swing.JLabel" as JLabel
+class Database
+
+note right of NantBuilderApp
+  <b>з'єднання об'єктів у main():</b>
+  CacheStatistics stats = new CacheStatistics();
+  BuildScriptRepository scripts = new CachingBuildScriptRepository(
+          new JdbcBuildScriptRepository(db), stats);
+  ScriptService service = new ScriptService(db, scripts, …);
+  mainForm.addStatusWidget(new CacheStatisticsLabel(stats));
+end note
+
+note bottom of CachingBuildScriptRepository
+  findAll(): кеш порожній → target.findAll() і recordMiss();
+  інакше recordHit() без звернення до БД.
+  findById / findByName: з кешу, якщо список завантажено,
+  інакше target (список не завантажується).
+  save / deleteById: target, потім invalidate().
+  Методи читання повертають копії заголовків.
+end note
+
+' --- шаблон Proxy
+ScriptService -down-> "1" BuildScriptRepository : scripts
+BuildScriptRepository <|.down. JdbcBuildScriptRepository
+BuildScriptRepository <|.down. CachingBuildScriptRepository
+CachingBuildScriptRepository -up-> BuildScriptRepository : target
+CachingBuildScriptRepository -down-> "1" CacheStatistics : statistics
+JdbcBuildScriptRepository .down.> Database
+
+' --- відображення статистики
+MainForm -right-> "1" ScriptService
+MainForm o-down- CacheStatisticsLabel : addStatusWidget()
+CacheStatisticsLabel -down-|> JLabel
+CacheStatisticsLabel -down-> "1" CacheStatistics : statistics\n(слухач змін)
+
+' --- створення об'єктів
+NantBuilderApp .down.> MainForm : <<create>>
+NantBuilderApp .right.> CachingBuildScriptRepository : <<create>>
+
+@enduml

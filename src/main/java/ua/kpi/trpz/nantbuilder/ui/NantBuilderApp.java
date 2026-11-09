@@ -3,6 +3,9 @@ package ua.kpi.trpz.nantbuilder.ui;
 import com.formdev.flatlaf.FlatLightLaf;
 import ua.kpi.trpz.nantbuilder.db.DataAccessException;
 import ua.kpi.trpz.nantbuilder.db.Database;
+import ua.kpi.trpz.nantbuilder.repository.BuildScriptRepository;
+import ua.kpi.trpz.nantbuilder.repository.cache.CacheStatistics;
+import ua.kpi.trpz.nantbuilder.repository.cache.CachingBuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcBuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcPropertyRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcTargetRepository;
@@ -20,6 +23,7 @@ import java.nio.file.Path;
 /**
  * Точка входу програми: налаштовує FlatLaf, відкриває базу даних
  * {@code %USERPROFILE%/.nant-script-builder/nantbuilder.db}, з'єднує репозиторії, сервіси та головну форму.
+ * Репозиторій заголовків скриптів обгорнуто кешуючим замісником {@link CachingBuildScriptRepository}.
  */
 public class NantBuilderApp {
 
@@ -39,13 +43,21 @@ public class NantBuilderApp {
         }
         Runtime.getRuntime().addShutdownHook(new Thread(db::close));
 
+        // шаблон Proxy: сервіс працює з кешуючим замісником так само, як працював би з JDBC-репозиторієм
+        CacheStatistics cacheStatistics = new CacheStatistics();
+        BuildScriptRepository scripts =
+                new CachingBuildScriptRepository(new JdbcBuildScriptRepository(db), cacheStatistics);
         ScriptService scriptService = new ScriptService(db,
-                new JdbcBuildScriptRepository(db), new JdbcPropertyRepository(db),
+                scripts, new JdbcPropertyRepository(db),
                 new JdbcTargetRepository(db), new JdbcTaskRepository(db));
         SolutionImportService importService =
                 new SolutionImportService(new SolutionParser(), new ScriptGenerator(), scriptService);
 
-        SwingUtilities.invokeLater(() -> new MainForm(scriptService, importService).setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            MainForm mainForm = new MainForm(scriptService, importService);
+            mainForm.addStatusWidget(new CacheStatisticsLabel(cacheStatistics));
+            mainForm.setVisible(true);
+        });
     }
 
     /** Українські написи стандартних діалогів Swing (кнопки повідомлень і вікна вибору файлу). */

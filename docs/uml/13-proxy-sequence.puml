@@ -1,0 +1,89 @@
+@startuml 13-proxy-sequence
+' Лаб. 4 — діаграма послідовності: читання списку скриптів через кешуючий замісник і скидання кешу після збереження
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 170
+
+actor "Розробник" as Dev
+participant ":MainForm" as MF
+participant ":ScriptEditor\nForm" as Ed
+participant ":ScriptService" as SS <<Client>>
+participant ":CachingBuildScript\nRepository" as Proxy <<Proxy>>
+participant ":CacheStatistics" as Stats
+participant ":JdbcBuildScript\nRepository" as Jdbc <<RealSubject>>
+database "nantbuilder.db" as SQL
+
+== Оновлення списку скриптів (відкриття або активація головної форми) ==
+
+Dev -> MF : <back:#FFFFFF>активує головне вікно</back>
+activate MF
+MF -> MF : <back:#FFFFFF>refreshScripts()</back>
+activate MF
+MF -> SS : <back:#FFFFFF>listScripts()</back>
+activate SS
+SS -> Proxy : <back:#FFFFFF>findAll()</back>
+activate Proxy
+
+alt кеш порожній (cache == null)
+  Proxy -> Stats : <back:#FFFFFF>recordMiss()</back>
+  Proxy -> Jdbc : <back:#FFFFFF>findAll()</back>
+  activate Jdbc
+  Jdbc -> SQL : <back:#FFFFFF>SELECT … ORDER BY name</back>
+  Jdbc --> Proxy : <back:#FFFFFF>List<BuildScript></back>
+  deactivate Jdbc
+  Proxy -> Proxy : <back:#FFFFFF>cache = копії заголовків</back>
+else кеш заповнений — без запиту до БД
+  Proxy -> Stats : <back:#FFFFFF>recordHit()</back>
+end
+
+Proxy -> Proxy : <back:#FFFFFF>copyAll(cache)</back>
+Proxy --> SS : <back:#FFFFFF>копії заголовків</back>
+deactivate Proxy
+SS --> MF : <back:#FFFFFF>List<BuildScript></back>
+deactivate SS
+deactivate MF
+MF --> Dev : <back:#FFFFFF>таблиця скриптів і «Кеш скриптів: з кешу N, запитів до БД M»</back>
+deactivate MF
+
+== Збереження скрипта в редакторі ==
+
+Dev -> Ed : <back:#FFFFFF>натискає «Зберегти»</back>
+activate Ed
+Ed -> SS : <back:#FFFFFF>saveScript(script)</back>
+activate SS
+SS -> Proxy : <back:#FFFFFF>findByName(name)</back>
+activate Proxy
+Proxy -> Stats : <back:#FFFFFF>recordHit()</back>
+Proxy --> SS : <back:#FFFFFF>Optional<копія> з кешу</back>
+deactivate Proxy
+
+group Database.inTransaction (у разі відкату кеш уже порожній)
+  SS -> Proxy : <back:#FFFFFF>save(script)</back>
+  activate Proxy
+  Proxy -> Jdbc : <back:#FFFFFF>save(script)</back>
+  activate Jdbc
+  Jdbc -> SQL : <back:#FFFFFF>UPDATE build_script …</back>
+  Jdbc --> Proxy : <back:#FFFFFF>script</back>
+  deactivate Jdbc
+  Proxy -> Proxy : <back:#FFFFFF>invalidate(): cache = null</back>
+  Proxy -> Stats : <back:#FFFFFF>recordInvalidation()</back>
+  Proxy --> SS : <back:#FFFFFF>script</back>
+  deactivate Proxy
+  SS -> SQL : <back:#FFFFFF>властивості, цілі, завдання (інші репозиторії)</back>
+end
+
+SS --> Ed : <back:#FFFFFF>script</back>
+deactivate SS
+Ed --> Dev : <back:#FFFFFF>«Скрипт збережено в базі даних о …»</back>
+deactivate Ed
+
+Dev -> MF : <back:#FFFFFF>повертається до головного вікна</back>
+activate MF
+ref over MF, SS, Proxy, Jdbc
+  refreshScripts(): гілка «кеш порожній» — список перечитується з БД і знову кешується;
+  наступні оновлення обслуговуються з кешу
+end ref
+deactivate MF
+
+@enduml

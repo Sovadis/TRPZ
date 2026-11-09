@@ -8,6 +8,7 @@ import ua.kpi.trpz.nantbuilder.service.ValidationException;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -54,6 +55,8 @@ public class MainForm extends JFrame {
     private final JButton openButton = new JButton("Відкрити");
     private final JButton deleteButton = new JButton("Видалити");
     private final JLabel statusLabel = new JLabel(" ");
+    /** Права частина рядка стану для додаткових індикаторів (наприклад, статистики кешу). */
+    private final JPanel statusWidgets = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
     /** Скрипти в тому самому порядку, що й рядки таблиці. */
     private List<BuildScript> scripts = new ArrayList<>();
 
@@ -65,8 +68,7 @@ public class MainForm extends JFrame {
 
         add(createToolBar(), BorderLayout.NORTH);
         add(createTablePane(), BorderLayout.CENTER);
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-        add(statusLabel, BorderLayout.SOUTH);
+        add(createStatusBar(), BorderLayout.SOUTH);
 
         // після повернення з редактора список оновлюється (могли змінитися назва або дата)
         addWindowListener(new WindowAdapter() {
@@ -105,6 +107,23 @@ public class MainForm extends JFrame {
         statusLabel.setText(scripts.isEmpty()
                 ? "У базі даних ще немає скриптів. Створіть новий скрипт або імпортуйте рішення .sln."
                 : "Скриптів у базі даних: " + scripts.size() + ". Подвійне клацання відкриває редактор.");
+    }
+
+    /** Додає індикатор у праву частину рядка стану (повідомлення залишаються ліворуч). */
+    public void addStatusWidget(JComponent widget) {
+        statusWidgets.add(widget);
+        statusWidgets.revalidate();
+        statusWidgets.repaint();
+    }
+
+    /** Рядок стану: повідомлення ліворуч, індикатори праворуч. */
+    private JPanel createStatusBar() {
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        statusWidgets.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        JPanel statusBar = new JPanel(new BorderLayout());
+        statusBar.add(statusLabel, BorderLayout.CENTER);
+        statusBar.add(statusWidgets, BorderLayout.EAST);
+        return statusBar;
     }
 
     /** Панель інструментів із кнопками основних дій. */
