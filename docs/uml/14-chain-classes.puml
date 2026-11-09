@@ -1,0 +1,133 @@
+@startuml 14-chain-classes
+' Лаб. 5 — діаграма класів шаблону Chain of Responsibility: ланцюжок перевірки скрипта
+!include _style.iuml
+skinparam ranksep 40
+skinparam nodesep 22
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+package "ua.kpi.trpz.nantbuilder.ui" as ui {
+  class ScriptEditorForm <<Client>> {
+    - scriptService : ScriptService {readOnly}
+    --
+    - checkScript() : void
+    - exportScript() : void
+  }
+  class ValidationReportDialog {
+    + ValidationReportDialog(owner : Window, issues : List<ValidationIssue>)
+  }
+}
+
+package "ua.kpi.trpz.nantbuilder.service" as service {
+  class ScriptService <<Client>> {
+    - validator : ScriptValidator {readOnly}
+    --
+    + saveScript(script : BuildScript) : BuildScript
+    + checkScript(script : BuildScript) : List<ValidationIssue>
+    + exportScript(script : BuildScript, file : Path) : void
+  }
+  class ValidationException
+}
+
+package "ua.kpi.trpz.nantbuilder.service.validation" as validation {
+  class ScriptValidator <<final>> {
+    - chain : ValidationHandler {readOnly}
+    --
+    + ScriptValidator(first : ValidationHandler)
+    + {static} standard() : ScriptValidator
+    + validate(script : BuildScript) : List<ValidationIssue>
+    + {static} hasErrors(issues : List<ValidationIssue>) : boolean
+  }
+  abstract class ValidationHandler <<Handler>> {
+    - next : ValidationHandler
+    --
+    + setNext(next : ValidationHandler) : ValidationHandler
+    + handle(script : BuildScript, issues : List<ValidationIssue>) : void {leaf}
+    # {abstract} check(script : BuildScript, issues : List<ValidationIssue>) : boolean
+  }
+  class ValidationIssue <<record>> {
+    + severity : Severity
+    + element : String
+    + message : String
+    --
+    + {static} error(element : String, message : String) : ValidationIssue
+    + {static} warning(element : String, message : String) : ValidationIssue
+  }
+  enum Severity {
+    ERROR
+    WARNING
+  }
+
+  class ScriptHeaderValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+  class PropertyValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+  class TargetNameValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+  class DependencyValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+  class DefaultTargetValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+  class TaskAttributeValidator <<ConcreteHandler>> {
+    # check(…) : boolean
+  }
+
+  note left of ValidationHandler
+    <b>handle()</b>:
+    if (check(script, issues) && next != null)
+        next.handle(script, issues);
+  end note
+
+  note as ChainOrder
+    <b>standard()</b> збирає ланцюжок:
+    ScriptHeaderValidator
+    → PropertyValidator
+    → TargetNameValidator
+    → DependencyValidator
+    → DefaultTargetValidator
+    → TaskAttributeValidator
+  end note
+
+  note bottom of TargetNameValidator
+    повертає false, якщо назви цілей
+    порожні або повторюються, —
+    ланцюжок зупиняється
+  end note
+}
+
+' --- клієнти
+ScriptEditorForm --> ScriptService : scriptService
+ScriptEditorForm .right.> ValidationReportDialog : <<create>>
+ValidationReportDialog ..> ValidationIssue : показує
+ScriptService --> ScriptValidator : validator
+ScriptService .left.> ValidationException : <<throw>>
+
+' --- ланцюжок
+ScriptValidator --> ValidationHandler : chain
+ValidationHandler --> ValidationHandler : next\n0..1
+ValidationHandler .up.> ValidationIssue : <<create>>
+ValidationIssue -right-> Severity
+' ряд: примітка про порядок → ScriptValidator → ValidationIssue → Severity
+ChainOrder .right. ScriptValidator
+ScriptValidator -[hidden]right- ValidationIssue
+
+' --- конкретні обробники (в одному ряду, у порядку стандартного ланцюжка)
+ValidationHandler <|-- ScriptHeaderValidator
+ValidationHandler <|-- PropertyValidator
+ValidationHandler <|-- TargetNameValidator
+ValidationHandler <|-- DependencyValidator
+ValidationHandler <|-- DefaultTargetValidator
+ValidationHandler <|-- TaskAttributeValidator
+ScriptHeaderValidator -[hidden]right- PropertyValidator
+PropertyValidator -[hidden]right- TargetNameValidator
+TargetNameValidator -[hidden]right- DependencyValidator
+DependencyValidator -[hidden]right- DefaultTargetValidator
+DefaultTargetValidator -[hidden]right- TaskAttributeValidator
+
+@enduml

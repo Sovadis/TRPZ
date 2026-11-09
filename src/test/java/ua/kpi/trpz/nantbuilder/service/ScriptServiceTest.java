@@ -17,6 +17,8 @@ import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcBuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcPropertyRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcTargetRepository;
 import ua.kpi.trpz.nantbuilder.repository.jdbc.JdbcTaskRepository;
+import ua.kpi.trpz.nantbuilder.service.validation.Severity;
+import ua.kpi.trpz.nantbuilder.service.validation.ValidationIssue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -26,7 +28,9 @@ import java.sql.Statement;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -177,6 +181,88 @@ class ScriptServiceTest {
     @Test
     void exportScriptWritesUtf8NantXml() throws Exception {
         BuildScript script = sampleScript();
+        Path file = tempDir.resolve("MyLibrary.build");
+
+        service.exportScript(script, file);
+
+        assertEquals(serializer.toXml(script), Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void saveScriptRejectsDependencyCycle() {
+        BuildScript script = sampleScript();
+        script.findTarget("compile").orElseThrow().getDependsOn().add("test");
+
+        ValidationException error = assertThrows(ValidationException.class, () -> service.saveScript(script));
+
+        assertEquals("Циклічна залежність цілей: compile → test → compile", error.getMessage());
+        assertTrue(service.listScripts().isEmpty());
+    }
+
+    @Test
+    void saveScriptErrorMessageListsAllErrorsFirstErrorFirst() {
+        BuildScript script = sampleScript();
+        script.addProperty(new ScriptProperty("configuration", "Release"));
+        script.findTarget("compile").orElseThrow().getDependsOn().add("missing");
+        script.setDefaultTarget("deploy");
+
+        ValidationException error = assertThrows(ValidationException.class, () -> service.saveScript(script));
+
+        assertEquals(List.of(
+                "Властивість «configuration» оголошено двічі",
+                "Ціль «compile» залежить від невідомої цілі «missing»",
+                "Ціль за замовчуванням «deploy» не знайдено серед цілей скрипта"), error.getMessage().lines().toList());
+    }
+
+    @Test
+    void saveScriptWithOnlyWarningsSucceeds() {
+        BuildScript script = sampleScript();
+        script.setDefaultTarget(null);
+        script.addProperty(new ScriptProperty("version", null));
+        script.findTarget("test").orElseThrow().addTask(BuildTask.withDefaults(TaskType.ECHO));
+
+        BuildScript loaded = service.loadScript(service.saveScript(script).getId());
+
+        assertNull(loaded.getDefaultTarget());
+        assertEquals("", loaded.getProperties().get(2).getValue());
+        assertEquals("", loaded.findTarget("test").orElseThrow().getTasks().get(2).getAttribute("message"));
+    }
+
+    @Test
+    void checkScriptReturnsWarningsAndErrorsWithoutThrowingOrSaving() {
+        BuildScript script = sampleScript();
+        script.setBaseDir("");
+        script.findTarget("clean").orElseThrow().addTask(BuildTask.withDefaults(TaskType.MKDIR));
+
+        List<ValidationIssue> warnings = service.checkScript(script);
+
+        assertEquals(List.of(
+                new ValidationIssue(Severity.WARNING, "<project> MyLibrary",
+                        "Не задано базову директорію (basedir), буде використано «.»"),
+                new ValidationIssue(Severity.WARNING, "<mkdir> у цілі clean",
+                        "Завдання <mkdir> у цілі «clean»: не задано атрибут «dir»")), warnings);
+
+        script.setDefaultTarget("deploy");
+        assertTrue(service.checkScript(script).stream().anyMatch(issue -> issue.severity() == Severity.ERROR));
+        assertTrue(service.listScripts().isEmpty());
+    }
+
+    @Test
+    void exportScriptWithErrorsThrowsAndWritesNothing() {
+        BuildScript script = sampleScript();
+        script.findTarget("clean").orElseThrow().getDependsOn().add("clean");
+        Path file = tempDir.resolve("MyLibrary.build");
+
+        ValidationException error = assertThrows(ValidationException.class, () -> service.exportScript(script, file));
+
+        assertEquals("Ціль «clean» не може залежати від самої себе", error.getMessage());
+        assertFalse(Files.exists(file));
+    }
+
+    @Test
+    void exportScriptWithOnlyWarningsWritesFile() throws Exception {
+        BuildScript script = sampleScript();
+        script.setDefaultTarget(null);
         Path file = tempDir.resolve("MyLibrary.build");
 
         service.exportScript(script, file);

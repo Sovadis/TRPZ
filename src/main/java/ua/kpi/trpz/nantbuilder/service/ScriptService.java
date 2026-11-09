@@ -9,6 +9,9 @@ import ua.kpi.trpz.nantbuilder.repository.BuildScriptRepository;
 import ua.kpi.trpz.nantbuilder.repository.PropertyRepository;
 import ua.kpi.trpz.nantbuilder.repository.TargetRepository;
 import ua.kpi.trpz.nantbuilder.repository.TaskRepository;
+import ua.kpi.trpz.nantbuilder.service.validation.ScriptValidator;
+import ua.kpi.trpz.nantbuilder.service.validation.Severity;
+import ua.kpi.trpz.nantbuilder.service.validation.ValidationIssue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -18,15 +21,14 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Сервіс роботи зі скриптами збірки: створення, завантаження повного графа об'єктів,
- * збереження в одній транзакції, видалення та експорт у файл .build.
+ * перевірка ланцюжком обробників, збереження в одній транзакції, видалення та експорт у файл .build.
  */
 public class ScriptService {
 
@@ -39,6 +41,8 @@ public class ScriptService {
     private final TargetRepository targets;
     private final TaskRepository tasks;
     private final XmlScriptSerializer serializer = new XmlScriptSerializer();
+    /** Клієнт шаблону Chain of Responsibility: сервіс лише запускає стандартний ланцюжок перевірок. */
+    private final ScriptValidator validator = ScriptValidator.standard();
 
     /** Створює сервіс поверх бази даних і репозиторіїв. */
     public ScriptService(Database db, BuildScriptRepository scripts, PropertyRepository properties,
@@ -118,11 +122,22 @@ public class ScriptService {
     /**
      * Зберігає весь скрипт в одній транзакції: оновлює заголовок (updatedAt = зараз)
      * і повністю замінює властивості, цілі, залежності та завдання.
+     * Перед збереженням назва перевіряється за базою даних, а весь скрипт — ланцюжком перевірок;
+     * попередження збереженню не заважають.
      *
-     * @throws ValidationException якщо дані скрипта некоректні
+     * @throws ValidationException якщо назва порожня чи зайнята або ланцюжок знайшов помилки
+     *                             (повідомлення містить усі помилки, кожну з нового рядка)
      */
     public BuildScript saveScript(BuildScript script) {
-        validate(script);
+        String name = script.getName() == null ? "" : script.getName().trim();
+        checkName(name, script.getId());
+        script.setName(name);
+        requireNoErrors(validator.validate(script));
+        for (ScriptProperty property : script.getProperties()) {
+            if (property.getValue() == null) {
+                property.setValue("");
+            }
+        }
         LocalDateTime now = now();
         if (script.getCreatedAt() == null) {
             script.setCreatedAt(now);
@@ -166,13 +181,27 @@ public class ScriptService {
         });
     }
 
+    /**
+     * Перевіряє скрипт ланцюжком обробників без звернення до бази даних і без винятків.
+     *
+     * @return усі знайдені помилки та попередження в порядку обробників ланцюжка
+     */
+    public List<ValidationIssue> checkScript(BuildScript script) {
+        return validator.validate(script);
+    }
+
     /** Видаляє скрипт разом з усіма властивостями, цілями та завданнями. */
     public void deleteScript(long id) {
         scripts.deleteById(id);
     }
 
-    /** Записує скрипт у файл .build (NAnt XML у кодуванні UTF-8). */
+    /**
+     * Записує скрипт у файл .build (NAnt XML у кодуванні UTF-8).
+     *
+     * @throws ValidationException якщо ланцюжок перевірок знайшов помилки (файл тоді не створюється)
+     */
     public void exportScript(BuildScript script, Path file) {
+        requireNoErrors(validator.validate(script));
         try {
             Files.writeString(file, serializer.toXml(script), StandardCharsets.UTF_8);
         } catch (IOException e) {
@@ -190,48 +219,13 @@ public class ScriptService {
         }
     }
 
-    private void validate(BuildScript script) {
-        String name = script.getName() == null ? "" : script.getName().trim();
-        checkName(name, script.getId());
-        script.setName(name);
-
-        Set<String> propertyNames = new HashSet<>();
-        for (ScriptProperty property : script.getProperties()) {
-            if (property.getName() == null || property.getName().isBlank()) {
-                throw new ValidationException("Назва властивості не може бути порожньою");
-            }
-            if (!propertyNames.add(property.getName())) {
-                throw new ValidationException("Властивість «" + property.getName() + "» оголошено двічі");
-            }
-            if (property.getValue() == null) {
-                property.setValue("");
-            }
-        }
-
-        Set<String> targetNames = new HashSet<>();
-        for (Target target : script.getTargets()) {
-            if (target.getName() == null || target.getName().isBlank()) {
-                throw new ValidationException("Назва цілі не може бути порожньою");
-            }
-            if (!targetNames.add(target.getName())) {
-                throw new ValidationException("Ціль «" + target.getName() + "» оголошено двічі");
-            }
-        }
-        for (Target target : script.getTargets()) {
-            Set<String> seen = new HashSet<>();
-            for (String dependencyName : target.getDependsOn()) {
-                if (!targetNames.contains(dependencyName)) {
-                    throw new ValidationException("Ціль «" + target.getName()
-                            + "» залежить від невідомої цілі «" + dependencyName + "»");
-                }
-                if (dependencyName.equals(target.getName())) {
-                    throw new ValidationException("Ціль «" + target.getName() + "» не може залежати від самої себе");
-                }
-                if (!seen.add(dependencyName)) {
-                    throw new ValidationException("Ціль «" + target.getName()
-                            + "» двічі залежить від «" + dependencyName + "»");
-                }
-            }
+    /** Кидає ValidationException з усіма помилками (перша помилка — першою), якщо вони є. */
+    private static void requireNoErrors(List<ValidationIssue> issues) {
+        if (ScriptValidator.hasErrors(issues)) {
+            throw new ValidationException(issues.stream()
+                    .filter(issue -> issue.severity() == Severity.ERROR)
+                    .map(ValidationIssue::message)
+                    .collect(Collectors.joining("\n")));
         }
     }
 

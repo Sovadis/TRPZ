@@ -9,7 +9,10 @@
 - конструювання скрипта перетягуванням цілей, завдань і властивостей з палітри;
 - автоматичне перетворення рішень Visual Studio (`.sln`) у скрипти збірки
   з урахуванням залежностей між проєктами;
-- зберігання скриптів у базі даних SQLite та експорт у файл `.build`.
+- зберігання скриптів у базі даних SQLite та експорт у файл `.build`;
+- кешування списку скриптів із показником роботи кешу (шаблон Proxy);
+- перевірка скрипта ланцюжком валідаторів зі звітом про помилки й попередження
+  (шаблон Chain of Responsibility).
 
 ## Технології
 
@@ -23,7 +26,9 @@ PlantUML.
 | `src/main/java/ua/kpi/trpz/nantbuilder/model` | класи предметної області |
 | `src/main/java/ua/kpi/trpz/nantbuilder/db` | підключення до SQLite, транзакції |
 | `src/main/java/ua/kpi/trpz/nantbuilder/repository` | шаблон Repository: інтерфейси та JDBC-реалізації |
+| `src/main/java/ua/kpi/trpz/nantbuilder/repository/cache` | шаблон Proxy: кешуючий замісник репозиторію |
 | `src/main/java/ua/kpi/trpz/nantbuilder/service` | бізнес-логіка, серіалізація XML, імпорт `.sln` |
+| `src/main/java/ua/kpi/trpz/nantbuilder/service/validation` | шаблон Chain of Responsibility: ланцюжок перевірок скрипта |
 | `src/main/java/ua/kpi/trpz/nantbuilder/ui` | форми Swing |
 | `src/main/resources/schema.sql` | структура бази даних |
 | `docs/uml` | UML-діаграми (джерела PlantUML і PNG) |
@@ -36,6 +41,8 @@ PlantUML.
 |---|---|---|
 | ЛР №2 | Основи проектування | `lab2` |
 | ЛР №3 | Основи проектування розгортання | `lab3` |
+| ЛР №4 | Вступ до патернів проектування (шаблон Proxy) | `lab4` |
+| ЛР №5 | Патерни проектування (шаблон Chain of Responsibility) | `lab5` |
 
 ## Збірка та запуск
 

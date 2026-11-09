@@ -24,8 +24,10 @@ import ua.kpi.trpz.nantbuilder.ui.CacheStatisticsLabel;
 import ua.kpi.trpz.nantbuilder.ui.MainForm;
 import ua.kpi.trpz.nantbuilder.ui.ScriptDialog;
 import ua.kpi.trpz.nantbuilder.ui.ScriptEditorForm;
+import ua.kpi.trpz.nantbuilder.ui.ValidationReportDialog;
 
 import javax.imageio.ImageIO;
+import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JRootPane;
@@ -63,6 +65,29 @@ public final class ScreenshotMaker {
      * тому літери не обрізаються, а результат однаковий на будь-якому моніторі.
      */
     private static final int SCALE = 2;
+
+    /** Скрипт WebApi після невдалого редагування XML: цикл, невідомі цілі, порожні значення. */
+    private static final String BROKEN_WEB_API_XML = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <project name="WebApi" default="build" basedir="src/WebApi">
+              <description>REST API інтернет-магазину</description>
+              <property name="configuration" value="Release" />
+              <property name="api.version" value="" />
+              <target name="clean" description="Очистити каталог збірки">
+                <delete dir="bin" />
+              </target>
+              <target name="compile" depends="clean,test">
+                <msbuild project="WebApi.csproj" />
+              </target>
+              <target name="test" depends="compile">
+                <exec program="dotnet" commandline="test ../WebApi.Tests" />
+              </target>
+              <target name="publish" depends="test,deploy">
+                <exec program="dotnet" commandline="publish -c ${configuration}" />
+                <echo message="" />
+              </target>
+            </project>
+            """;
 
     private ScreenshotMaker() {
     }
@@ -179,6 +204,9 @@ public final class ScreenshotMaker {
             });
             capture(mainForm, outDir.resolve("05-main-form-cache.png"));
 
+            // 6. Звіт «Перевірка скрипта» над редактором (ЛР №5, ланцюжок перевірок)
+            captureValidationReport(scriptService, outDir.resolve("06-validation-dialog.png"));
+
             onEdt(() -> {
                 mainForm.dispose();
                 return null;
@@ -215,6 +243,50 @@ public final class ScreenshotMaker {
         script.getTargets().clear();
         script.getTargets().addAll(List.of(clean, compile, test, build));
         scriptService.saveScript(script);
+    }
+
+    /**
+     * Відкриває редактор нового скрипта WebApi, вносить помилки через вкладку XML (як користувач)
+     * і натискає «Перевірити»; знімок містить редактор і діалог звіту поверх нього.
+     */
+    private static void captureValidationReport(ScriptService scriptService, Path file) throws Exception {
+        BuildScript webApi = scriptService.createScript("WebApi", "REST API інтернет-магазину", "src/WebApi");
+        ScriptEditorForm editor = onEdt(() -> {
+            ScriptEditorForm form = new ScriptEditorForm(scriptService, scriptService.loadScript(webApi.getId()));
+            form.setLocation(60, 60);
+            form.setVisible(true);
+            return form;
+        });
+        settle(800);
+        onEdt(() -> {
+            // зміни тексту XML застосовуються під час повернення на вкладку «Конструктор»
+            JTabbedPane tabs = find(editor, JTabbedPane.class, null);
+            tabs.setSelectedIndex(1);
+            find(editor, RSyntaxTextArea.class, null).setText(BROKEN_WEB_API_XML);
+            tabs.setSelectedIndex(0);
+            return null;
+        });
+        settle(400);
+        // діалог модальний, тому кнопка натискається без очікування завершення обробника
+        SwingUtilities.invokeLater(() -> find(editor, JButton.class, "checkButton").doClick());
+        settle(800);
+        ValidationReportDialog report = onEdt(() -> {
+            for (Window owned : editor.getOwnedWindows()) {
+                if (owned instanceof ValidationReportDialog dialog && dialog.isShowing()) {
+                    // діалог зсунуто вниз (над рядком стану), щоб у кадрі лишилися цілі з циклом у дереві
+                    dialog.setLocation(editor.getX() + (editor.getWidth() - dialog.getWidth()) / 2,
+                            editor.getY() + editor.getHeight() - dialog.getHeight() - 36);
+                    return dialog;
+                }
+            }
+            throw new IllegalStateException("Validation report dialog is not shown");
+        });
+        capture(editor, report, file);
+        onEdt(() -> {
+            report.dispose();
+            editor.dispose();
+            return null;
+        });
     }
 
     private static Target target(String name, String description) {
@@ -275,6 +347,11 @@ public final class ScreenshotMaker {
      * Використовується paint(), а не printAll(): у режимі друку JTable не показує виділений рядок.
      */
     private static void capture(Window window, Path file) throws Exception {
+        capture(window, null, file);
+    }
+
+    /** Те саме, але поверх вікна в його поточній позиції малюється ще й діалог (з легкою тінню). */
+    private static void capture(Window window, Window dialog, Path file) throws Exception {
         settle(400);
         BufferedImage image = onEdt(() -> {
             JRootPane root = ((RootPaneContainer) window).getRootPane();
@@ -298,6 +375,9 @@ public final class ScreenshotMaker {
                         child.dispose();
                     }
                 }
+                if (dialog != null) {
+                    paintDialog(g, origin, dialog);
+                }
             } finally {
                 repaintManager.setDoubleBufferingEnabled(true);
                 g.dispose();
@@ -311,6 +391,25 @@ public final class ScreenshotMaker {
         });
         ImageIO.write(image, "png", file.toFile());
         System.out.println("  " + file.getFileName() + " (" + image.getWidth() + "x" + image.getHeight() + ")");
+    }
+
+    /** Малює діалог у його позиції відносно вікна-власника, з тінню і рамкою. */
+    private static void paintDialog(Graphics2D g, Point origin, Window dialog) {
+        JRootPane dialogRoot = ((RootPaneContainer) dialog).getRootPane();
+        Point location = dialogRoot.getLocationOnScreen();
+        int x = location.x - origin.x;
+        int y = location.y - origin.y;
+        int width = dialogRoot.getWidth();
+        int height = dialogRoot.getHeight();
+        for (int i = 8; i >= 1; i--) {
+            g.setColor(new Color(0, 0, 0, 10));
+            g.fillRoundRect(x - i + 2, y - i + 4, width + 2 * i - 4, height + 2 * i - 4, 2 * i, 2 * i);
+        }
+        Graphics2D child = (Graphics2D) g.create(x, y, width, height);
+        dialogRoot.paint(child);
+        child.dispose();
+        g.setColor(new Color(0x9E, 0x9E, 0x9E));
+        g.drawRect(x, y, width - 1, height - 1);
     }
 
     /** Дає Swing час показати вікна і завершити компонування. */

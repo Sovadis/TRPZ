@@ -13,6 +13,9 @@ import ua.kpi.trpz.nantbuilder.model.TaskType;
 import ua.kpi.trpz.nantbuilder.service.ScriptService;
 import ua.kpi.trpz.nantbuilder.service.ValidationException;
 import ua.kpi.trpz.nantbuilder.service.XmlScriptSerializer;
+import ua.kpi.trpz.nantbuilder.service.validation.ScriptValidator;
+import ua.kpi.trpz.nantbuilder.service.validation.Severity;
+import ua.kpi.trpz.nantbuilder.service.validation.ValidationIssue;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -82,6 +85,7 @@ import java.util.function.Supplier;
  * Редактор скрипта збірки. Вкладка «Конструктор»: палітра елементів (джерело перетягування),
  * дерево скрипта (ціль перетягування) і таблиця атрибутів вибраного вузла.
  * Вкладка «XML»: текст скрипта з підсвічуванням синтаксису, згортанням коду та автодоповненням.
+ * Кнопка «Перевірити» запускає ланцюжок перевірок і показує всі знайдені проблеми.
  */
 public class ScriptEditorForm extends JFrame {
 
@@ -159,6 +163,10 @@ public class ScriptEditorForm extends JFrame {
         JButton applyButton = new JButton("Застосувати XML");
         applyButton.setToolTipText("Розібрати текст на вкладці XML і оновити дерево");
         applyButton.addActionListener(e -> applyXml());
+        JButton checkButton = new JButton("Перевірити");
+        checkButton.setName("checkButton");
+        checkButton.setToolTipText("Знайти всі помилки та попередження в скрипті");
+        checkButton.addActionListener(e -> checkScript());
         JButton exportButton = new JButton("Експорт .build…");
         exportButton.setToolTipText("Записати скрипт NAnt у файл");
         exportButton.addActionListener(e -> exportScript());
@@ -169,6 +177,7 @@ public class ScriptEditorForm extends JFrame {
         JPanel toolBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
         toolBar.add(saveButton);
         toolBar.add(applyButton);
+        toolBar.add(checkButton);
         toolBar.add(exportButton);
         toolBar.add(deleteButton);
         return toolBar;
@@ -618,9 +627,27 @@ public class ScriptEditorForm extends JFrame {
         setStatus("Скрипт збережено в базі даних о " + LocalTime.now().format(TIME_FORMAT));
     }
 
+    /** Сценарій «Перевірити скрипт»: ланцюжок перевірок і звіт з усіма знайденими проблемами. */
+    private void checkScript() {
+        stopTableEditing();
+        if (xmlEdited && !applyXml()) {
+            return;
+        }
+        List<ValidationIssue> issues = scriptService.checkScript(script);
+        setStatus("Перевірку завершено. " + ValidationReportDialog.summaryOf(issues));
+        new ValidationReportDialog(this, issues).setVisible(true);
+    }
+
+    /** Експорт у файл .build; спершу скрипт перевіряється, і з помилками експорт не виконується. */
     private void exportScript() {
         stopTableEditing();
         if (xmlEdited && !applyXml()) {
+            return;
+        }
+        List<ValidationIssue> issues = scriptService.checkScript(script);
+        if (ScriptValidator.hasErrors(issues)) {
+            setStatus("Експорт скасовано: у скрипті є помилки");
+            new ValidationReportDialog(this, issues).setVisible(true);
             return;
         }
         JFileChooser chooser = new JFileChooser();
@@ -639,8 +666,9 @@ public class ScriptEditorForm extends JFrame {
         }
         try {
             scriptService.exportScript(script, file);
-            setStatus("Скрипт експортовано у файл " + file);
-        } catch (UncheckedIOException e) {
+            long warnings = issues.stream().filter(issue -> issue.severity() == Severity.WARNING).count();
+            setStatus("Скрипт експортовано у файл " + file + (warnings > 0 ? " (попереджень: " + warnings + ")" : ""));
+        } catch (UncheckedIOException | ValidationException e) {
             showError(e.getMessage());
         }
     }
