@@ -1,0 +1,52 @@
+@startuml 13a-proxy-seq-refresh
+' Лаб. 4 — діаграма послідовності: оновлення списку скриптів через кешувальний замісник
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 150
+
+actor "Розробник" as Dev
+participant ":MainForm" as MF
+participant ":ScriptService" as SS <<Client>>
+participant ":CachingBuild\nScriptRepository" as Proxy <<Proxy>>
+participant ":CacheStatistics" as Stats
+participant ":CacheStatistics\nLabel" as Label
+participant ":JdbcBuild\nScriptRepository" as Jdbc <<RealSubject>>
+
+Dev -> MF : <back:#FFFFFF>активує головне вікно</back>
+activate MF
+MF -> MF : <back:#FFFFFF>refreshScripts()</back>
+activate MF
+MF -> SS : <back:#FFFFFF>listScripts()</back>
+activate SS
+SS -> Proxy : <back:#FFFFFF>findAll()</back>
+activate Proxy
+
+alt cache == null (кеш порожній)
+  Proxy -> Stats : <back:#FFFFFF>recordMiss()</back>
+  activate Stats
+  Stats -> Label : <back:#FFFFFF>onStatisticsChanged()</back>
+  deactivate Stats
+  Proxy -> Jdbc : <back:#FFFFFF>findAll()</back>
+  activate Jdbc
+  Jdbc --> Proxy : <back:#FFFFFF>List<BuildScript> (SELECT … ORDER BY name)</back>
+  deactivate Jdbc
+  Proxy -> Proxy : <back:#FFFFFF>cache = копії</back>
+else кеш заповнений (без запиту до БД)
+  Proxy -> Stats : <back:#FFFFFF>recordHit()</back>
+  activate Stats
+  Stats -> Label : <back:#FFFFFF>onStatisticsChanged()</back>
+  deactivate Stats
+end
+
+Proxy -> Proxy : <back:#FFFFFF>copyAll(cache)</back>
+Proxy --> SS : <back:#FFFFFF>копії заголовків</back>
+deactivate Proxy
+SS --> MF : <back:#FFFFFF>List<BuildScript></back>
+deactivate SS
+deactivate MF
+MF --> Dev : <back:#FFFFFF>таблиця скриптів</back>
+deactivate MF
+Label -> Dev : <back:#FFFFFF>рядок стану «Кеш скриптів: з кешу N, запитів до БД M»</back>
+
+@enduml
