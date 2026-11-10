@@ -32,7 +32,7 @@ class TaskAttributeValidatorTest {
     }
 
     @Test
-    void everyMissingDefaultAttributeIsReportedInOrder() {
+    void everyMissingRequiredAttributeIsReportedInOrder() {
         BuildScript script = validScript();
         BuildTask copy = new BuildTask();
         copy.setType(TaskType.COPY);
@@ -41,7 +41,36 @@ class TaskAttributeValidatorTest {
 
         assertEquals(List.of(
                 "Завдання <copy> у цілі «compile»: не задано атрибут «file»",
-                "Завдання <copy> у цілі «compile»: не задано атрибут «todir»"), messages(run(validator, script)));
+                "Завдання <copy> у цілі «compile»: не задано атрибут «tofile» або «todir»"),
+                messages(run(validator, script)));
+    }
+
+    @Test
+    void deleteNeedsFileOrDir() {
+        BuildScript script = validScript();
+        script.findTarget("build").orElseThrow().addTask(task(TaskType.DELETE, "file", "bin/app.dll"));
+        script.findTarget("build").orElseThrow().addTask(task(TaskType.DELETE, "dir", ""));
+
+        assertEquals(List.of("Завдання <delete> у цілі «build»: не задано атрибут «file» або «dir»"),
+                messages(run(validator, script)));
+    }
+
+    @Test
+    void copyToFileIsEnough() {
+        BuildScript script = validScript();
+        BuildTask copy = task(TaskType.COPY, "file", "app.config");
+        copy.setAttribute("tofile", "bin/app.config");
+        script.findTarget("build").orElseThrow().addTask(copy);
+
+        assertTrue(run(validator, script).isEmpty());
+    }
+
+    @Test
+    void execWithoutCommandlineIsValid() {
+        BuildScript script = validScript();
+        script.findTarget("build").orElseThrow().addTask(task(TaskType.EXEC, "program", "dotnet"));
+
+        assertTrue(run(validator, script).isEmpty());
     }
 
     @Test
@@ -50,5 +79,12 @@ class TaskAttributeValidatorTest {
         script.findTarget("build").orElseThrow().getTasks().get(0).setAttribute("level", "");
 
         assertTrue(run(validator, script).isEmpty());
+    }
+
+    private static BuildTask task(TaskType type, String attribute, String value) {
+        BuildTask task = new BuildTask();
+        task.setType(type);
+        task.setAttribute(attribute, value);
+        return task;
     }
 }

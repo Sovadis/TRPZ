@@ -55,6 +55,14 @@ class DependencyValidatorTest {
     }
 
     @Test
+    void repeatedUnknownDependencyIsReportedOnce() {
+        BuildScript script = validScript();
+        script.findTarget("build").orElseThrow().getDependsOn().addAll(List.of("missing", "missing"));
+
+        assertEquals(List.of("Ціль «build» залежить від невідомої цілі «missing»"), messages(run(validator, script)));
+    }
+
+    @Test
     void twoTargetCycleIsNamedInMessage() {
         BuildScript script = scriptWith(target("a", "b"), target("b", "a"));
 

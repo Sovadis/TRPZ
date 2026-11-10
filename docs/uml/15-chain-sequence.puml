@@ -6,6 +6,7 @@ skinparam responseMessageBelowArrow true
 skinparam maxMessageSize 120
 
 actor "Розробник" as Dev
+participant ":ValidationReport\nDialog" as RD
 participant ":ScriptEditorForm" as ED
 participant ":ScriptService" as SS
 participant ":ScriptValidator" as SV
@@ -13,11 +14,12 @@ participant ":ScriptHeader\nValidator" as H1
 participant ":Property\nValidator" as H2
 participant ":TargetName\nValidator" as H3
 participant ":Dependency\nValidator" as H4
-participant ":ValidationReport\nDialog" as RD
 
 Dev -> ED : <back:#FFFFFF>натискає «Перевірити»</back>
 activate ED
-ED -> ED : applyXml(),\nякщо XML змінено
+opt XML змінено
+  ED -> ED : applyXml()
+end
 ED -> SS : <back:#FFFFFF>checkScript(script)</back>
 activate SS
 SS -> SV : <back:#FFFFFF>validate(script)</back>
@@ -32,24 +34,21 @@ H2 -> H2 : check():\nвластивості
 H2 -> H3 : <back:#FFFFFF>next.handle(…)</back>
 activate H3
 H3 -> H3 : check():\nназви цілей
+note right of H3
+  якщо check() повернув
+  false, next.handle()
+  не викликається —
+  ланцюжок зупинено
+end note
 
-alt TargetNameValidator\nзнайшов помилки
-  note right of H3
-    check() повернув false:
-    next.handle() не викликається,
-    ланцюжок зупинено
-  end note
-else <back:#FFFFFF>назви цілей коректні</back>
+opt назви цілей коректні
   H3 -> H4 : <back:#FFFFFF>next.handle(…)</back>
   activate H4
   H4 -> H4 : check():\nзалежності,\nцикли (DFS)
-  note right of H4
+  note over H3, H4
     далі так само:
-    next.handle() →
-    DefaultTarget-
-    Validator →
-    TaskAttribute-
-    Validator
+    DefaultTargetValidator,
+    TaskAttributeValidator
   end note
   H4 --> H3
   deactivate H4
@@ -70,10 +69,11 @@ ED -> ED : setStatus(«Перевірку\nзавершено…»)
 ED -> RD ** : <back:#FFFFFF>new(this, issues)</back>
 ED -> RD : <back:#FFFFFF>setVisible(true)</back>
 activate RD
-RD --> Dev : <back:#FFFFFF>таблиця проблем і підсумок</back>
+RD -> Dev : <back:#FFFFFF>показує таблицю проблем і підсумок</back>
 Dev -> RD : <back:#FFFFFF>натискає «Закрити»</back>
 RD -> RD : dispose()
-deactivate RD
+RD --> ED
+destroy RD
 deactivate ED
 
 @enduml

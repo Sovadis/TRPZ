@@ -32,8 +32,11 @@ public class DependencyValidator extends ValidationHandler {
             Set<String> seen = new HashSet<>();
             for (String dependency : target.getDependsOn()) {
                 if (!seen.add(dependency)) {
-                    issues.add(ValidationIssue.error(element,
-                            "Ціль «" + name + "» двічі залежить від «" + dependency + "»"));
+                    // про невідому ціль чи залежність від самої себе вже повідомлено — повтор не дублюємо
+                    if (dependencies.contains(dependency)) {
+                        issues.add(ValidationIssue.error(element,
+                                "Ціль «" + name + "» двічі залежить від «" + dependency + "»"));
+                    }
                 } else if (!targetNames.contains(dependency)) {
                     issues.add(ValidationIssue.error(element,
                             "Ціль «" + name + "» залежить від невідомої цілі «" + dependency + "»"));

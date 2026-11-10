@@ -1,28 +1,26 @@
 @startuml 14-chain-classes
 ' Лаб. 5 — діаграма класів шаблону Chain of Responsibility: ланцюжок перевірки скрипта
+' (пакети вказано відносно ua.kpi.trpz.nantbuilder)
 !include _style.iuml
-skinparam ranksep 40
-skinparam nodesep 22
+skinparam ranksep 45
+skinparam nodesep 30
 skinparam classAttributeIconSize 0
 hide empty members
 set separator none
 
-package "ua.kpi.trpz.nantbuilder.ui" as ui {
+package "ui" as ui {
   class ScriptEditorForm <<Client>> {
-    - scriptService : ScriptService {readOnly}
-    --
     - checkScript() : void
     - exportScript() : void
   }
   class ValidationReportDialog {
-    + ValidationReportDialog(owner : Window, issues : List<ValidationIssue>)
+    + ValidationReportDialog(owner : Window,
+        issues : List<ValidationIssue>)
   }
 }
 
-package "ua.kpi.trpz.nantbuilder.service" as service {
+package "service" as service {
   class ScriptService <<Client>> {
-    - validator : ScriptValidator {readOnly}
-    --
     + saveScript(script : BuildScript) : BuildScript
     + checkScript(script : BuildScript) : List<ValidationIssue>
     + exportScript(script : BuildScript, file : Path) : void
@@ -30,24 +28,19 @@ package "ua.kpi.trpz.nantbuilder.service" as service {
   class ValidationException
 }
 
-package "ua.kpi.trpz.nantbuilder.service.validation" as validation {
-  class ScriptValidator <<final>> {
-    - chain : ValidationHandler {readOnly}
-    --
+package "service.validation" as validation {
+  class "ScriptValidator {leaf}" as ScriptValidator {
     + ScriptValidator(first : ValidationHandler)
     + {static} standard() : ScriptValidator
     + validate(script : BuildScript) : List<ValidationIssue>
     + {static} hasErrors(issues : List<ValidationIssue>) : boolean
   }
   abstract class ValidationHandler <<Handler>> {
-    - next : ValidationHandler
-    --
     + setNext(next : ValidationHandler) : ValidationHandler
     + handle(script : BuildScript, issues : List<ValidationIssue>) : void {leaf}
     # {abstract} check(script : BuildScript, issues : List<ValidationIssue>) : boolean
   }
   class ValidationIssue <<record>> {
-    + severity : Severity
     + element : String
     + message : String
     --
@@ -84,8 +77,9 @@ package "ua.kpi.trpz.nantbuilder.service.validation" as validation {
         next.handle(script, issues);
   end note
 
-  note as ChainOrder
-    <b>standard()</b> збирає ланцюжок:
+  note left of ScriptValidator
+    <b>standard()</b> створює обробники
+    і з'єднує їх через setNext():
     ScriptHeaderValidator
     → PropertyValidator
     → TargetNameValidator
@@ -102,22 +96,21 @@ package "ua.kpi.trpz.nantbuilder.service.validation" as validation {
 }
 
 ' --- клієнти
-ScriptEditorForm --> ScriptService : scriptService
+ScriptEditorForm --> "- scriptService\n1" ScriptService
 ScriptEditorForm .right.> ValidationReportDialog : <<create>>
+ScriptEditorForm ..> ScriptValidator : <<use>>\nhasErrors()
 ValidationReportDialog ..> ValidationIssue : показує
-ScriptService --> ScriptValidator : validator
-ScriptService .left.> ValidationException : <<throw>>
+ScriptService --> "- validator\n1" ScriptValidator
+ScriptService .right.> ValidationException : <<throw>>
 
 ' --- ланцюжок
-ScriptValidator --> ValidationHandler : chain
-ValidationHandler --> ValidationHandler : next\n0..1
-ValidationHandler .up.> ValidationIssue : <<create>>
-ValidationIssue -right-> Severity
-' ряд: примітка про порядок → ScriptValidator → ValidationIssue → Severity
-ChainOrder .right. ScriptValidator
+ScriptValidator --> "- chain\n1" ValidationHandler
+ValidationHandler --> "- next\n0..1" ValidationHandler
+ValidationHandler .up.> ValidationIssue : <<use>>
 ScriptValidator -[hidden]right- ValidationIssue
+ValidationIssue -down-> "+ severity\n1" Severity
 
-' --- конкретні обробники (в одному ряду, у порядку стандартного ланцюжка)
+' --- конкретні обробники (два ряди по три, у порядку стандартного ланцюжка)
 ValidationHandler <|-- ScriptHeaderValidator
 ValidationHandler <|-- PropertyValidator
 ValidationHandler <|-- TargetNameValidator
@@ -126,7 +119,9 @@ ValidationHandler <|-- DefaultTargetValidator
 ValidationHandler <|-- TaskAttributeValidator
 ScriptHeaderValidator -[hidden]right- PropertyValidator
 PropertyValidator -[hidden]right- TargetNameValidator
-TargetNameValidator -[hidden]right- DependencyValidator
+ScriptHeaderValidator -[hidden]down- DependencyValidator
+PropertyValidator -[hidden]down- DefaultTargetValidator
+TargetNameValidator -[hidden]down- TaskAttributeValidator
 DependencyValidator -[hidden]right- DefaultTargetValidator
 DefaultTargetValidator -[hidden]right- TaskAttributeValidator
 

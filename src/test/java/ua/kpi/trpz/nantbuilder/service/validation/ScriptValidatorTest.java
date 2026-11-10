@@ -76,7 +76,7 @@ class ScriptValidatorTest {
                 new ValidationIssue(Severity.WARNING, "<project> MyLibrary",
                         "Не задано ціль за замовчуванням: під час запуску NAnt ціль доведеться вказувати явно"),
                 new ValidationIssue(Severity.WARNING, "<delete> у цілі clean",
-                        "Завдання <delete> у цілі «clean»: не задано атрибут «dir»")), issues);
+                        "Завдання <delete> у цілі «clean»: не задано атрибут «file» або «dir»")), issues);
         assertTrue(ScriptValidator.hasErrors(issues));
     }
 
