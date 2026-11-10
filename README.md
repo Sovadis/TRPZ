@@ -26,7 +26,7 @@ PlantUML.
 | `src/main/java/ua/kpi/trpz/nantbuilder/model` | класи предметної області |
 | `src/main/java/ua/kpi/trpz/nantbuilder/db` | підключення до SQLite, транзакції |
 | `src/main/java/ua/kpi/trpz/nantbuilder/repository` | шаблон Repository: інтерфейси та JDBC-реалізації |
-| `src/main/java/ua/kpi/trpz/nantbuilder/repository/cache` | шаблон Proxy: кешуючий замісник репозиторію |
+| `src/main/java/ua/kpi/trpz/nantbuilder/repository/cache` | шаблон Proxy: кешувальний замісник репозиторію |
 | `src/main/java/ua/kpi/trpz/nantbuilder/service` | бізнес-логіка, серіалізація XML, імпорт `.sln` |
 | `src/main/java/ua/kpi/trpz/nantbuilder/service/validation` | шаблон Chain of Responsibility: ланцюжок перевірок скрипта |
 | `src/main/java/ua/kpi/trpz/nantbuilder/ui` | форми Swing |

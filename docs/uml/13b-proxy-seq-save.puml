@@ -1,0 +1,66 @@
+@startuml 13b-proxy-seq-save
+' Лаб. 4 — діаграма послідовності: збереження скрипта скидає кеш замісника, повторне читання йде до БД
+!include _style.iuml
+hide footbox
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 150
+
+actor "Розробник" as Dev
+participant ":ScriptEditor\nForm" as Ed
+participant ":ScriptService" as SS <<Client>>
+participant ":CachingBuild\nScriptRepository" as Proxy <<Proxy>>
+participant ":CacheStatistics" as Stats
+participant ":JdbcBuild\nScriptRepository" as Jdbc <<RealSubject>>
+
+Dev -> Ed : <back:#FFFFFF>натискає «Зберегти»</back>
+activate Ed
+Ed -> SS : <back:#FFFFFF>saveScript(script)</back>
+activate SS
+SS -> Proxy : <back:#FFFFFF>findByName(name)</back>
+activate Proxy
+Proxy -> Stats : <back:#FFFFFF>recordHit()</back>
+Proxy --> SS : <back:#FFFFFF>Optional<копія> з кешу</back>
+deactivate Proxy
+
+critical Database.inTransaction
+  SS -> Proxy : <back:#FFFFFF>save(script)</back>
+  activate Proxy
+  Proxy -> Jdbc : <back:#FFFFFF>save(script)</back>
+  activate Jdbc
+  Jdbc --> Proxy : <back:#FFFFFF>script (UPDATE build_script)</back>
+  deactivate Jdbc
+  Proxy -> Proxy : <back:#FFFFFF>invalidate(): cache = null</back>
+  Proxy -> Stats : <back:#FFFFFF>recordInvalidation()</back>
+  Proxy --> SS : <back:#FFFFFF>script</back>
+  deactivate Proxy
+  note over SS
+    властивості, цілі й завдання
+    зберігають PropertyRepository,
+    TargetRepository, TaskRepository
+  end note
+end
+SS --> Ed : <back:#FFFFFF>script</back>
+deactivate SS
+
+Ed -> SS : <back:#FFFFFF>loadScript(id)</back>
+activate SS
+SS -> Proxy : <back:#FFFFFF>findById(id)</back>
+activate Proxy
+Proxy -> Stats : <back:#FFFFFF>recordMiss()</back>
+Proxy -> Jdbc : <back:#FFFFFF>findById(id)</back>
+activate Jdbc
+Jdbc --> Proxy : <back:#FFFFFF>Optional<BuildScript> (SELECT … WHERE id = ?)</back>
+deactivate Jdbc
+Proxy --> SS : <back:#FFFFFF>Optional<копія></back>
+deactivate Proxy
+SS --> Ed : <back:#FFFFFF>script з даними з БД</back>
+deactivate SS
+Ed --> Dev : <back:#FFFFFF>«Скрипт збережено в базі даних о …»</back>
+deactivate Ed
+
+note over Dev, Proxy
+  Після повернення до головного вікна refreshScripts() іде гілкою
+  «кеш порожній»: список перечитується з БД і знову кешується
+end note
+
+@enduml
